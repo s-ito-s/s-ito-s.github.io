@@ -1,0 +1,334 @@
+<html>
+
+<style>
+body {
+  margin: 0;
+}
+</style>
+
+<script>
+
+const SCALE_HEIGHT = 80
+const MARGIN_Y = 40
+const TIMELINE_HEIGHT = 40
+
+// タイムライン
+const timelines = [
+  [ 
+    {start: new Date('2023/10/6 23:10:23.93 GMT+0000').getTime(), end: new Date('2023/10/6 23:40:11.654 GMT+0000').getTime()},
+    {start: new Date('2023/10/7 0:15:12.43 GMT+0000').getTime(), end: new Date('2023/10/7 5:40:39.802 GMT+0000').getTime()},
+    {start: new Date('2023/10/7 8:15:04.345 GMT+0000').getTime(), end: new Date('2023/10/7 12:34:21.851 GMT+0000').getTime()},
+  ],
+  [ 
+    {start: new Date('2023/10/6 20:10:32 GMT+0000').getTime(), end: new Date('2023/10/6 22:40:04 GMT+0000').getTime()},
+    {start: new Date('2023/10/7 1:15:04 GMT+0000').getTime(), end: new Date('2023/10/7 4:40:43 GMT+0000').getTime()},
+    {start: new Date('2023/10/7 5:15:45 GMT+0000').getTime(), end: new Date('2023/10/7 13:34:23 GMT+0000').getTime()},
+    {start: new Date('2023/10/7 15:15:11 GMT+0000').getTime(), end: new Date('2023/10/7 21:34:11 GMT+0000').getTime()},
+  ],
+  [ 
+    {start: new Date('2023/10/5 20:10:53.432 GMT+0000').getTime(), end: new Date('2023/10/6 22:40:23.23 GMT+0000').getTime()},
+    {start: new Date('2023/10/7 1:10:23.323 GMT+0000').getTime(), end: new Date('2023/10/7 2:40:02.432 GMT+0000').getTime()},
+    {start: new Date('2023/10/8 1:15:12.008 GMT+0000').getTime(), end: new Date('2023/10/8 4:40:44.773 GMT+0000').getTime()},
+    {start: new Date('2023/10/9 5:15:46.208 GMT+0000').getTime(), end: new Date('2023/10/9 13:34:31.34 GMT+0000').getTime()},
+  ]
+]
+
+// 時間
+let startTimeMs = new Date('2023/10/6 20:00:00 GMT+0000').getTime()
+let timeMsPerPix = 1000 * 50 // 1 ピクセル当たりミリ秒
+let minTimeMsPerPix = 0.005 // 最小のピクセル当たりミリ秒
+let maxTimeMsPerPix = 1500000 // 最大のピクセル当たりミリ秒
+
+// マウス操作
+let isMouseDown = false
+let mousePosX = 0
+
+function init() {
+  const canvas = document.createElement("canvas");
+  
+  canvas.addEventListener("mousedown", (e) => {
+    isMouseDown = true
+    mousePosX = e.clientX
+  })
+
+  canvas.addEventListener("mouseup", (e) => {
+    isMouseDown = false
+  })
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!isMouseDown) {
+      return
+    }
+    const diffX = e.clientX - mousePosX
+    startTimeMs -= diffX * timeMsPerPix
+    mousePosX = e.clientX
+    draw(canvas);
+  })
+
+  canvas.addEventListener("wheel", (e) => {
+    const prevTimePerPix = timeMsPerPix
+    const diff = e.deltaY
+    let nextTimePerPix = 0
+    if (diff > 0) {
+      nextTimePerPix = timeMsPerPix * 1.1
+    } else {
+      nextTimePerPix = timeMsPerPix * 0.9
+    }
+    timeMsPerPix = Math.max(minTimeMsPerPix, Math.min(maxTimeMsPerPix, nextTimePerPix)) 
+    startTimeMs += (prevTimePerPix - timeMsPerPix) * e.offsetX
+    draw(canvas);
+  })
+
+  window.addEventListener('resize', () => {
+    resize(canvas)
+  })
+
+  document.body.appendChild(canvas);
+
+  resize(canvas);
+}
+
+function resize(canvas) {
+  canvas.width = document.body.clientWidth;
+  canvas.height = SCALE_HEIGHT + 
+    (MARGIN_Y + TIMELINE_HEIGHT) * timelines.length + MARGIN_Y
+  canvas.style.width = canvas.width + "px"
+  canvas.style.height = canvas.height + "px"
+  draw(canvas)
+}
+
+function draw(canvas) {
+  drawFrame(canvas);
+  drawTimelines(canvas);
+  drawScale(canvas);
+}
+
+function drawFrame(canvas) {
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width
+  const height = canvas.height
+  drawRect(ctx, 0, 0, width, height, "rgb(240, 240, 240)");
+  drawRect(ctx, 0, 0, width, SCALE_HEIGHT, "rgb(30, 30, 30)");
+}
+
+function drawScale(canvas) {
+  const ctx = canvas.getContext("2d")
+
+  const scaleIntervalMs = getScaleIntervalMs()
+  const scaleTextType = getScaleTextType()
+  const endTimeMs = startTimeMs + canvas.width * timeMsPerPix
+  let scaleTimeMs = startTimeMs - (startTimeMs % scaleIntervalMs)
+  while(1) {
+    if (scaleTimeMs > endTimeMs) {
+      break
+    }
+
+    // 目盛りを描画する
+    const posX = time2Pos(scaleTimeMs)
+    drawLine(ctx, posX, SCALE_HEIGHT * 0.7, posX, canvas.height, "rgb(180, 180, 180)")
+
+    // 目盛りに描画するテキストを調整
+    const date = new Date(scaleTimeMs)
+    const month = String(date.getUTCMonth() + 1)
+    const day = String(date.getUTCDate())
+    const hour = String(date.getUTCHours())
+    const min = String(date.getUTCMinutes()).padStart(2, '0')
+    const sec = String(date.getUTCSeconds()).padStart(2, '0')
+    let text = ''
+    if (scaleTextType === 'day') {
+      text = month + '/' + day
+    }else if (scaleTextType === 'min') {      
+      text = hour + ':' + min
+    }else if (scaleTextType === 'sec' || scaleTextType === 'msec'){
+      text = hour + ':' + min + ':' + sec
+    }
+
+    // 日時を描画する
+    const textWidth = ctx.measureText(text).width
+    if (scaleTextType === 'msec') {
+      drawText(ctx, posX - textWidth / 2, SCALE_HEIGHT * 0.3, text, "rgb(200, 200, 200)", 16)
+      const msec = '.' + String(date.getUTCMilliseconds()).padStart(3, '0')
+      msecTextWidth = ctx.measureText(msec).width
+      drawText(ctx, posX - msecTextWidth / 2, SCALE_HEIGHT * 0.6, msec, "rgb(200, 200, 200)", 16)
+    } else {
+      drawText(ctx, posX - textWidth / 2, SCALE_HEIGHT * 0.6, text, "rgb(200, 200, 200)", 16)
+    }
+    
+    // 0:00:00 の場合は日付も描画する
+    if (
+      (scaleTextType === 'min' && hour === '0' && min === '00') || 
+      (scaleTextType === 'sec' && hour === '0' && min === '00' && sec === '00')
+    ) {
+      const dateText = month + '/' + day
+      const dateTextWidth = ctx.measureText(dateText).width
+      drawText(ctx, posX - dateTextWidth / 2, SCALE_HEIGHT * 0.3, dateText, "rgb(200, 200, 200)", 16)      
+    }
+
+    // デバッグ用にスケールの時間を描画
+    // drawText(ctx, 10, 20, timeMsPerPix, "rgb(200, 200, 200)", 15)
+    
+    scaleTimeMs += scaleIntervalMs
+  }
+}
+
+function drawTimelines(canvas) {
+  const ctx = canvas.getContext('2d');
+
+  const endTimeMs = startTimeMs + canvas.width * timeMsPerPix
+  for (let i = 0; i < timelines.length; i++) {
+    const timelinePosY = SCALE_HEIGHT + MARGIN_Y * (i + 1) + TIMELINE_HEIGHT * i
+
+    for (let j = 0; j < timelines[i].length; ++j) {
+      const timelineStartTimeMs = timelines[i][j].start
+      const timelineEndTimeMs = timelines[i][j].end
+      
+      // タイムラインが現在表示している範囲外の場合は描画しない
+      if (timelineEndTimeMs < startTimeMs || endTimeMs < timelineStartTimeMs) {
+        continue
+      }
+
+      // タイムラインを描画範囲を計算
+      let x = time2Pos(timelineStartTimeMs)
+      let width = time2Pos(timelineEndTimeMs) - time2Pos(timelineStartTimeMs)
+
+      // タイムラインの開始位置が表示範囲より前の場合の描画位置補正
+      if (timelineStartTimeMs < startTimeMs && timelineEndTimeMs < endTimeMs) {
+        x = 0
+        width = time2Pos(timelineEndTimeMs) - time2Pos(startTimeMs)
+      }
+
+      // タイムラインの終了位置が表示範囲より後の場合の描画位置補正
+      if (startTimeMs < timelineStartTimeMs && endTimeMs < timelineEndTimeMs ) {
+        x = time2Pos(timelineStartTimeMs)
+        width = canvas.width - x
+      }
+
+      drawRect(ctx, x, timelinePosY, width, TIMELINE_HEIGHT, 'rgb(20, 200, 20)')
+    }
+  }
+}
+
+function drawLine(ctx, x1, y1, x2, y2, color) {
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+}
+
+function drawRect(ctx, x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, h);
+}
+
+function drawText(ctx, x, y, text, color, size) {
+  ctx.font = size + "px serif";
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+
+function getScaleIntervalMs() {
+  if (timeMsPerPix < 0.014) {
+    return 1 // 1 ミリ秒
+  }
+
+  if (timeMsPerPix < 0.04) {
+    return 5 // 5 ミリ秒
+  }
+
+  if (timeMsPerPix < 0.12) {
+    return 10 // 10 ミリ秒
+  }
+
+  if (timeMsPerPix < 0.36) {
+    return 50 // 50 ミリ秒
+  }
+  
+  if (timeMsPerPix < 1.2) {
+    return 100 // 100 ミリ秒
+  }
+  
+  if (timeMsPerPix < 6) {
+    return 500 // 500 ミリ秒
+  }
+
+  if (timeMsPerPix < 12) {
+    return 1000 // 1 秒
+  }
+
+  if (timeMsPerPix < 50) {
+    return 1000 * 5 // 5 秒
+  }
+  
+  if (timeMsPerPix < 120) {
+    return 1000 * 10 // 10 秒
+  }
+
+  if (timeMsPerPix < 240) {
+    return 1000 * 30 // 30 秒
+  }
+  
+  if (timeMsPerPix < 240) {
+    return 1000 * 30 // 30 秒
+  }
+  
+  if (timeMsPerPix < 1000) {
+    return 1000 * 60 // 1 分
+  }
+
+  if (timeMsPerPix < 1000 * 4) {
+    return 1000 * 60 * 5 // 5 分
+  }
+
+  if (timeMsPerPix < 1000 * 8) {
+    return 1000 * 60 * 10 // 10 分
+  }
+
+  if (timeMsPerPix < 1000 * 18) {
+    return 1000 * 60 * 30 // 30 分
+  }
+
+  if (timeMsPerPix < 1000 * 60) {
+    return 1000 * 60 * 60 // 1 時間
+  }
+
+  if (timeMsPerPix < 1000 * 150) {
+    return 1000 * 60 * 60 * 3 // 3 時間
+  }
+
+  if (timeMsPerPix < 1000 * 300) {
+    return 1000 * 60 * 60 * 6 // 6 時間
+  }
+
+  if (timeMsPerPix < 1000 * 600) {
+    return 1000 * 60 * 60 * 12 // 12 時間
+  }  
+
+  return 1000 * 60 * 60 * 24 // 24 時間
+}
+
+function getScaleTextType() {
+  if (timeMsPerPix < 6) {
+    return 'msec'
+  }
+
+  if (timeMsPerPix < 240) {
+    return 'sec'
+  }
+
+  if (timeMsPerPix > 1000 * 600) {
+    return 'day'
+  }
+
+  return 'min'
+}
+
+function time2Pos (time) {
+  return (time - startTimeMs) / timeMsPerPix
+}
+
+</script>
+
+<body onload="init()">
+</body>
+</html>
