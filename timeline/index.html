@@ -18,12 +18,17 @@ const timelines = [
     {start: new Date('2023/10/6 23:10:23.93 GMT+0000').getTime(), end: new Date('2023/10/6 23:40:11.654 GMT+0000').getTime()},
     {start: new Date('2023/10/7 0:15:12.43 GMT+0000').getTime(), end: new Date('2023/10/7 5:40:39.802 GMT+0000').getTime()},
     {start: new Date('2023/10/7 8:15:04.345 GMT+0000').getTime(), end: new Date('2023/10/7 12:34:21.851 GMT+0000').getTime()},
+    {start: new Date('2023/10/8 8:15:04.345 GMT+0000').getTime(), end: new Date('2023/10/8 8:15:05.235 GMT+0000').getTime()},
+    {start: new Date('2023/10/8 8:15:06.923 GMT+0000').getTime(), end: new Date('2023/10/8 8:15:07.035 GMT+0000').getTime()},
+    {start: new Date('2023/10/8 8:15:08.653 GMT+0000').getTime(), end: new Date('2023/10/8 8:15:08.855 GMT+0000').getTime()},
+    {start: new Date('2023/10/8 8:15:12.432 GMT+0000').getTime(), end: new Date('2023/10/8 8:15:13.135 GMT+0000').getTime()},
   ],
   [ 
     {start: new Date('2023/10/6 20:10:32 GMT+0000').getTime(), end: new Date('2023/10/6 22:40:04 GMT+0000').getTime()},
     {start: new Date('2023/10/7 1:15:04 GMT+0000').getTime(), end: new Date('2023/10/7 4:40:43 GMT+0000').getTime()},
     {start: new Date('2023/10/7 5:15:45 GMT+0000').getTime(), end: new Date('2023/10/7 13:34:23 GMT+0000').getTime()},
     {start: new Date('2023/10/7 15:15:11 GMT+0000').getTime(), end: new Date('2023/10/7 21:34:11 GMT+0000').getTime()},
+    {start: new Date('2023/10/8 8:15:12.432 GMT+0000').getTime(), end: new Date('2023/10/8 8:15:13.135 GMT+0000').getTime()},
   ],
   [ 
     {start: new Date('2023/10/5 20:10:53.432 GMT+0000').getTime(), end: new Date('2023/10/6 22:40:23.23 GMT+0000').getTime()},
@@ -202,6 +207,9 @@ function drawTimelines(canvas) {
         x = time2Pos(timelineStartTimeMs)
         width = canvas.width - x
       }
+
+      // 消えてしまわないように最低限の幅を確保
+      width = Math.max(1, width)
 
       drawRect(ctx, x, timelinePosY, width, TIMELINE_HEIGHT, 'rgb(20, 200, 20)')
     }
