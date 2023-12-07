@@ -1,0 +1,103 @@
+<html lang="ja">
+
+<style>
+
+#description {
+  margin: 10px 0;
+}
+
+pre {
+  margin: 0;
+  padding: 10px;
+  color: #fff;
+  background-color: #222;
+}
+</style>
+
+<script src="../../Logger/Logger.js"></script>
+
+<script>
+const logger = new Logger()
+
+function task () {
+  for (let i = 0; i < 100000000; i++) {
+    const a = i * i
+  }
+}
+
+function downloadTextFile (text, filename) {
+  const blob = new Blob([text], { type: 'text/plain' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = filename
+  link.click()
+}
+
+async function doMainTask () {
+  console.log('start MainTask')
+  const mainTaskId = logger.start('メインタスク', '')
+
+  // 適当な時間のかかるタスク1回目
+  let taskId = logger.start('適当な時間のかかるタスク', '1回目')
+  task()
+  logger.stop(taskId)
+
+  // setTimeout で遅延実行されるタスク
+  setTimeout( () => {
+    let taskId = logger.start('適当な時間のかかるタスク', '2回目???')
+    task()
+    logger.stop(taskId)
+  }, 0)
+
+  // 適当な時間のかかるタスク3回目  
+  taskId = logger.start('適当な時間のかかるタスク', '3回目')
+  task()
+  logger.stop(taskId)
+
+  console.log('end MainTask')
+  logger.stop(mainTaskId)
+}
+
+outputLog = () => {
+  const logData = logger.output()
+  console.log(logData)
+  downloadTextFile(JSON.stringify(logData), 'log.txt')
+}
+
+</script>
+
+<body>
+<button onclick="doMainTask()">メインタスク実行</button>
+<button onclick="outputLog()">ログ出力</button>
+<div id="description">
+  setTimeout で待ち時間ゼロでも、タスクキューに積まれて後から実行される。
+</div>
+<pre>
+  async function doMainTask () {
+    console.log('start MainTask')
+    const mainTaskId = logger.start('メインタスク', '')
+  
+    // 適当な時間のかかるタスク1回目
+    let taskId = logger.start('適当な時間のかかるタスク', '1回目')
+    task()
+    logger.stop(taskId)
+  
+    // setTimeout で遅延実行されるタスク
+    setTimeout( () => {
+      let taskId = logger.start('適当な時間のかかるタスク', '2回目???')
+      task()
+      logger.stop(taskId)
+    }, 0)
+  
+    // 適当な時間のかかるタスク3回目  
+    taskId = logger.start('適当な時間のかかるタスク', '3回目')
+    task()
+    logger.stop(taskId)
+  
+    console.log('end MainTask')
+    logger.stop(mainTaskId)
+  }
+</pre>
+</body>
+
+</html>

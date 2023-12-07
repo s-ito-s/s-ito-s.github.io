@@ -1,0 +1,57 @@
+<html lang="ja">
+
+<script src="TimelineViewer.js"></script>
+
+<style>
+body {
+  margin: 0;
+}
+
+input {
+  margin: 10;
+}
+
+#timeline {
+  margin: 0 10px;
+}
+</style>
+
+<script>
+function init() {
+  const timelineViewer = new TimelineViewer();
+  timelineViewer.initialize(document.getElementById("timeline"));
+
+  const scaleInput = document.getElementById("scaleInput");
+  scaleInput.value = timelineViewer.getScale();
+  scaleInput.addEventListener("change", () => {
+    timelineViewer.setScale(scaleInput.value);
+  }, false);
+  timelineViewer.onChangeScale = (scale) => {
+    scaleInput.value = scale;
+  };
+
+  const fileInput = document.getElementById("fileInput");
+  fileInput.addEventListener("change", () => {
+    const file = event.target.files[0];
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const logData = JSON.parse(event.target.result);
+      timelineViewer.setTimelines(logData);
+    };
+    reader.readAsText(file);    
+  }, false);
+}
+</script>
+
+<body onload="init()">
+  <input id="fileInput" type="file">
+  <select id="scaleInput">
+    <option value="msec">msec</option>
+    <option value="sec">sec</option>
+    <option value="min">min</option>
+    <option value="hour">hour</option>
+    <option value="day">day</option>
+  </select>
+  <div id="timeline"></div>
+</body>
+</html>
