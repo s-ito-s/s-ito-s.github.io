@@ -236,83 +236,34 @@ function drawText(ctx, x, y, text, color, size) {
 }
 
 function getScaleIntervalMs() {
-  if (timeMsPerPix < 0.014) {
-    return 1 // 1 ミリ秒
+  const map = [
+    { timePerPix:0.014,interval:1 },
+    { timePerPix:0.04, interval:5 },
+    { timePerPix:0.12, interval:10 },
+    { timePerPix:0.36, interval:50 },
+    { timePerPix:1.2, interval:100 },
+    { timePerPix:6, interval:500 },
+    { timePerPix:12, interval:1000 },
+    { timePerPix:50, interval:1000*5 },
+    { timePerPix:120, interval:1000*10 },
+    { timePerPix:240, interval:1000*30 },
+    { timePerPix:1000, interval:1000*60 },
+    { timePerPix:1000*4, interval:1000*60*5 },
+    { timePerPix:1000*8, interval:1000*60*10 },
+    { timePerPix:1000*18, interval:1000*60*30 },
+    { timePerPix:1000*60, interval:1000*60*60 },
+    { timePerPix:1000*150, interval:1000*60*60*3 },
+    { timePerPix:1000*300, interval:1000*60*60*6 },
+    { timePerPix:1000*600, interval:1000*60*60*12 },
+  ]
+
+  for (const m of map) {
+    if(m.timePerPix > timeMsPerPix) {
+      return m.interval
+    }
   }
 
-  if (timeMsPerPix < 0.04) {
-    return 5 // 5 ミリ秒
-  }
-
-  if (timeMsPerPix < 0.12) {
-    return 10 // 10 ミリ秒
-  }
-
-  if (timeMsPerPix < 0.36) {
-    return 50 // 50 ミリ秒
-  }
-  
-  if (timeMsPerPix < 1.2) {
-    return 100 // 100 ミリ秒
-  }
-  
-  if (timeMsPerPix < 6) {
-    return 500 // 500 ミリ秒
-  }
-
-  if (timeMsPerPix < 12) {
-    return 1000 // 1 秒
-  }
-
-  if (timeMsPerPix < 50) {
-    return 1000 * 5 // 5 秒
-  }
-  
-  if (timeMsPerPix < 120) {
-    return 1000 * 10 // 10 秒
-  }
-
-  if (timeMsPerPix < 240) {
-    return 1000 * 30 // 30 秒
-  }
-  
-  if (timeMsPerPix < 240) {
-    return 1000 * 30 // 30 秒
-  }
-  
-  if (timeMsPerPix < 1000) {
-    return 1000 * 60 // 1 分
-  }
-
-  if (timeMsPerPix < 1000 * 4) {
-    return 1000 * 60 * 5 // 5 分
-  }
-
-  if (timeMsPerPix < 1000 * 8) {
-    return 1000 * 60 * 10 // 10 分
-  }
-
-  if (timeMsPerPix < 1000 * 18) {
-    return 1000 * 60 * 30 // 30 分
-  }
-
-  if (timeMsPerPix < 1000 * 60) {
-    return 1000 * 60 * 60 // 1 時間
-  }
-
-  if (timeMsPerPix < 1000 * 150) {
-    return 1000 * 60 * 60 * 3 // 3 時間
-  }
-
-  if (timeMsPerPix < 1000 * 300) {
-    return 1000 * 60 * 60 * 6 // 6 時間
-  }
-
-  if (timeMsPerPix < 1000 * 600) {
-    return 1000 * 60 * 60 * 12 // 12 時間
-  }  
-
-  return 1000 * 60 * 60 * 24 // 24 時間
+  return 1000*60*60*24
 }
 
 function getScaleTextType() {

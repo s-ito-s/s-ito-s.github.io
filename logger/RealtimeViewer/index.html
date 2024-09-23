@@ -1,0 +1,147 @@
+<html lang="ja">
+
+<script src="TimelineViewer.js"></script>
+<script src="Logger.js"></script>
+
+<style>
+body {
+  margin: 0;
+}
+
+.inputArea {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px;
+}
+
+#timeline {
+  margin: 0 10px;
+}
+</style>
+
+<script>
+const time = new Date().getTime()
+const logger = new Logger()
+
+async function func1 () {
+  const taskId = logger.start('func1')
+  for (let i = 0; i < 100000000; i++) {
+    const a = i * i
+  }
+  logger.stop(taskId)  
+}
+
+async function func2 () {
+  const taskId = logger.start('func2')
+  for (let i = 0; i < 200000000; i++) {
+    const a = i * i
+  }
+  logger.stop(taskId)  
+}
+
+async function func3 () {
+  const taskId = logger.start('func3')
+  func1()
+  func2()
+  func1()
+  logger.stop(taskId)  
+}
+
+async function funcFetch () {
+  const taskId = logger.start('fetch')
+  const res = await fetch('https://jsonplaceholder.typicode.com/todos/1')
+  const text = await res.text()
+  logger.stop(taskId)  
+}
+
+async function funcPromise () {
+  const taskId = logger.start('Promise')  
+  await new Promise( (resolve) => {
+    setTimeout( () => {
+      resolve()
+    }, 3000)
+  })
+  logger.stop(taskId)  
+}
+
+function init() {
+  const timelineViewer = new TimelineViewer();
+  timelineViewer.initialize(document.getElementById("timeline"));
+  const startTime = new Date();
+  timelineViewer.setStartTime({
+    year: startTime.getFullYear(),
+    month: startTime.getMonth() + 1,
+    day: startTime.getDate(),
+    hour: startTime.getHours(),
+    min: startTime.getMinutes(),
+    sec: startTime.getSeconds(),
+    msec: startTime.getMilliseconds(),
+  });
+
+  const scaleInput = document.getElementById("scaleInput");
+  scaleInput.value = timelineViewer.getScale();
+  scaleInput.addEventListener("change", () => {
+    timelineViewer.setScale(scaleInput.value);
+  }, false);
+  timelineViewer.onChangeScale = (scale) => {
+    scaleInput.value = scale;
+  };
+
+  const func11Button = document.getElementById("func1");
+  func11Button.addEventListener('click', async () => {
+    func1();
+    const logData = logger.output();
+    timelineViewer.setTimelines(logData);
+  });
+
+  const func2Button = document.getElementById("func2");
+  func2Button.addEventListener('click', async () => {
+    func2();
+    const logData = logger.output();
+    timelineViewer.setTimelines(logData);
+  });
+
+  const func3Button = document.getElementById("func3");
+  func3Button.addEventListener('click', async () => {
+    func3();
+    const logData = logger.output();
+    timelineViewer.setTimelines(logData);
+  });
+
+  const fetchButton = document.getElementById("fetch");
+  fetchButton.addEventListener('click', async () => {
+    await funcFetch();
+    const logData = logger.output();
+    timelineViewer.setTimelines(logData);
+  });  
+
+  const promiseButton = document.getElementById("promise");
+  promiseButton.addEventListener('click', async () => {
+    await funcPromise();
+    const logData = logger.output();
+    timelineViewer.setTimelines(logData);
+  });
+}
+</script>
+
+<body onload="init()">
+  <div class="inputArea">
+    <div>
+      <button id="func1">func1</button>
+      <button id="func2">func2</button>
+      <button id="func3">func3</button>
+      <button id="fetch">fetch</button>
+      <button id="promise">promise</button>
+    </div>
+    <select id="scaleInput">
+      <option value="msec">msec</option>
+      <option value="sec">sec</option>
+      <option value="min">min</option>
+      <option value="hour">hour</option>
+      <option value="day">day</option>
+    </select>
+  </div>
+  <div id="timeline"></div>
+</body>
+</html>

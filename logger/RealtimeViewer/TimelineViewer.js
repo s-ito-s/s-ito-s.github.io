@@ -21,7 +21,7 @@ class TimelineViewer {
 
   // 時間
   startTimeMs = new Date().getTime()
-  timeMsPerPix = 1000 * 50 // 1 ピクセル当たりミリ秒
+  timeMsPerPix = 50 // 1 ピクセル当たりミリ秒
   minTimeMsPerPix = 0.005 // 最小のピクセル当たりミリ秒
   maxTimeMsPerPix = 1500000 // 最大のピクセル当たりミリ秒
 
@@ -123,13 +123,12 @@ class TimelineViewer {
         events
       } 
     })
-    const firstEvent = this.timelines[0].events[0]
-    this.startTimeMs = firstEvent.start
-    this.timeMsPerPix = (firstEvent.end - firstEvent.start) / this.canvas.width * 2
-    if (this.onChangeScale) {
-      this.onChangeScale(this.getScale())
-    }
     this.resize()
+  }
+
+  setStartTime(startTime) {
+    this.startTimeMs = toMsTime(startTime)
+    this.draw()
   }
 
   setTimePerPix(timePerPix) {
