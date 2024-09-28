@@ -1,0 +1,94 @@
+<html></html>
+
+<style>
+#canvas {
+  border: 1px solid #000;
+  margin-bottom: 10px;
+}
+</style>
+
+<script>
+let mapOffset = {x: 0, y: 0}
+
+let isMouseDown = false
+let mousePosX = -1
+let mousePosY = -1
+
+async function init() {
+  const res = await fetch('ne_50m_land.json')
+  const data = await res.json();
+  const landPolygons = data.features.map(feature => {
+    return feature.geometry.coordinates[0].map(coord => {
+      const lon = coord[0]
+      const lat = coord[1]
+      return lonLat2MapPos(lon, lat)
+    })
+  })
+
+  const canvas = document.getElementById('canvas')
+  canvas.addEventListener('mousedown', (e) => {
+    isMouseDown = true
+    mousePosX = e.offsetX
+    mousePosY = e.offsetY
+  })
+  canvas.addEventListener('mouseup', () => {
+    isMouseDown = false
+  })
+  canvas.addEventListener('mousemove', (e) => {
+    if (isMouseDown) {
+      const prevMousePosX = mousePosX
+      const prevMousePosY = mousePosY
+      mousePosX = e.offsetX
+      mousePosY = e.offsetY
+      mapOffset.x += prevMousePosX - mousePosX
+      mapOffset.y += prevMousePosY - mousePosY
+      draw(landPolygons)
+    }
+  })
+
+  draw(landPolygons)
+}
+
+function draw (polygons) {
+  const canvas = document.getElementById('canvas')
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, 500, 500)
+
+  for (const polygon of polygons) {
+    const vertices = polygon.map(vertex => {
+      return map2canvas(vertex.x, vertex.y)
+    })
+    drawPolygon(ctx, vertices)
+  }
+}
+
+function drawPolygon(ctx, vertices) {
+  ctx.beginPath()
+  ctx.moveTo(vertices[0].x, vertices[0].y)
+  for(let i = 1; vertices.length > i; ++i) {
+    ctx.lineTo(vertices[i].x, vertices[i].y)
+  }
+  ctx.closePath()
+  ctx.stroke()
+}
+
+function lonLat2MapPos(lon, lat) {
+  return {
+    x: lon + 180,
+    y: 90 - lat,
+  }
+}
+
+function map2canvas(x, y) {
+  return {
+    x: x - mapOffset.x,
+    y: y - mapOffset.y,
+  }
+}
+</script>
+
+<body onload="init()">
+  <canvas id="canvas" width="500" height="500"></canvas>
+</body>
+
+</html>
