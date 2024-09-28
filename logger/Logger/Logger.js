@@ -30,6 +30,10 @@ class Logger {
 
     for (let key in this.logs) {
       const log = this.logs[key]
+      if (log.end === null) {
+        continue;
+      }
+
       const taskData = logData.find( (e) => {
         return e.name === log.taskName
       })
