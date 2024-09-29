@@ -53,6 +53,8 @@ async function doMainTask () {
     let taskId = logger.start('適当な時間のかかるタスク', '2回目???')
     task()
     logger.stop(taskId)
+    const logData = logger.output();
+    timelineViewer.setTimelines(logData);    
   }, 0)
 
   // 適当な時間のかかるタスク3回目  
@@ -80,28 +82,30 @@ async function doMainTask () {
       const a = i * i
     }
   }
-  
+
   async function doMainTask () {
     console.log('start MainTask')
     const mainTaskId = logger.start('メインタスク', '')
-  
+
     // 適当な時間のかかるタスク1回目
     let taskId = logger.start('適当な時間のかかるタスク', '1回目')
     task()
     logger.stop(taskId)
-  
+
     // setTimeout 0 秒で実行されるタスク2回目
     setTimeout( () => {
       let taskId = logger.start('適当な時間のかかるタスク', '2回目???')
       task()
       logger.stop(taskId)
+      const logData = logger.output();
+      timelineViewer.setTimelines(logData);      
     }, 0)
-  
+
     // 適当な時間のかかるタスク3回目  
     taskId = logger.start('適当な時間のかかるタスク', '3回目')
     task()
     logger.stop(taskId)
-  
+
     console.log('end MainTask')
     logger.stop(mainTaskId)
   }
