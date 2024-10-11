@@ -1,0 +1,318 @@
+<html>
+
+<style>
+#canvas {
+  border: 1px solid black;
+}
+
+.input-wapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: 10px;
+}
+
+.input-label {
+  width: 100px;
+}
+</style>
+
+<script>
+let isRectDrawing = false;
+let mousePos = { x: 0, y: 0 };
+let rects = [];
+let selectedRectIdx = -1;
+let resizeControllerColorPos = [];
+let resizeState = null;
+
+function init() {
+  const canvas = document.getElementById('canvas');
+  canvas.width = 500;
+  canvas.height = 500;
+
+  const inputArea = document.getElementById('input-area');
+  inputArea.style.display = 'none';
+
+  canvas.addEventListener('mousedown', (e) => {
+    mousePos = { x: e.offsetX, y: e.offsetY };
+    
+    for (const key in resizeControllerColorPos) {
+      const pos = resizeControllerColorPos[key];
+      if (isInsideRect(pos, mousePos)) {
+        resizeState = key;
+        return;
+      }
+    }
+    
+    selectedRectIdx = rects.findIndex((rect) => isInsideRect(rect, mousePos));
+    if (selectedRectIdx === -1) {
+      isRectDrawing = true;
+    }
+    updateInputArea();
+    draw();    
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    if (isRectDrawing) {
+      const newMousePos = { x: e.offsetX, y: e.offsetY };
+      const rect = {
+        x: mousePos.x,
+        y: mousePos.y,
+        width: newMousePos.x - mousePos.x,
+        height: newMousePos.y - mousePos.y,
+        color: '#0000ff',
+      };
+      rects.push(rect);
+      selectedRectIdx = rects.length - 1;
+      updateInputArea();
+      draw();
+      isRectDrawing = false;
+    }
+
+    if (resizeState) {
+      resizeState = null;
+    }
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    const newMousePos = { x: e.offsetX, y: e.offsetY };
+    if (isRectDrawing) {
+      draw();
+
+      const x = mousePos.x
+      const y = mousePos.y
+      const width = newMousePos.x - mousePos.x
+      const height = newMousePos.y - mousePos.y
+      const color = '#0000ff'
+      strokeRect(x, y, width, height, color);
+    }
+
+    if (resizeState) {
+      const rect = rects[selectedRectIdx];
+      const dx = newMousePos.x - mousePos.x;
+      const dy = newMousePos.y - mousePos.y;
+      resizeRect(rect, resizeState, dx, dy);
+      draw();
+      updateInputArea();
+      mousePos = { x: e.offsetX, y: e.offsetY };
+    }
+  });
+
+  document.getElementById('x').addEventListener('input', (e) => {
+    if (selectedRectIdx !== -1) {
+      rects[selectedRectIdx].x = parseInt(e.target.value);
+      draw();
+    }
+  });
+
+  document.getElementById('y').addEventListener('input', (e) => {
+    if (selectedRectIdx !== -1) {
+      rects[selectedRectIdx].y = parseInt(e.target.value);
+      draw();
+    }
+  });
+
+  document.getElementById('w').addEventListener('input', (e) => {
+    if (selectedRectIdx !== -1) {
+      rects[selectedRectIdx].width = parseInt(e.target.value);
+      draw();
+    }
+  });
+
+  document.getElementById('h').addEventListener('input', (e) => {
+    if (selectedRectIdx !== -1) {
+      rects[selectedRectIdx].height = parseInt(e.target.value);
+      draw();
+    }
+  });
+
+  document.getElementById('fillColor').addEventListener('input', (e) => {
+    if (selectedRectIdx !== -1) {
+      rects[selectedRectIdx].color = e.target.value;
+      draw();
+    }
+  });
+}
+
+function draw() {
+  clearCanvas();
+
+  rects.forEach((rect) => {
+    fillRect(rect.x, rect.y, rect.width, rect.height, rect.color);
+  });
+
+  if (selectedRectIdx !== -1) {
+    drawResizeController();
+  }
+}
+
+function drawResizeController() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  const rect = rects[selectedRectIdx];
+  const { x, y, width, height } = rect;
+
+  const resizeControllerSize = 8;
+  const resizeControllerColor = 'red';
+
+  // frame
+  strokeRect(x, y, width, height, resizeControllerColor);
+
+  // top-left
+  let cx = x - resizeControllerSize / 2;
+  let cy = y - resizeControllerSize / 2;
+  fillRect(cx, cy, resizeControllerSize, resizeControllerSize, resizeControllerColor);
+  resizeControllerColorPos['top-left'] = { x: cx, y: cy, width: resizeControllerSize, height: resizeControllerSize };
+
+  // top-center
+  cx += width / 2;
+  fillRect(cx, cy, resizeControllerSize, resizeControllerSize, resizeControllerColor);
+  resizeControllerColorPos['top-center'] = { x: cx, y: cy, width: resizeControllerSize, height: resizeControllerSize };
+
+  // top-right
+  cx += width / 2;
+  fillRect(cx, cy, resizeControllerSize, resizeControllerSize, resizeControllerColor);
+  resizeControllerColorPos['top-right'] = { x: cx, y: cy, width: resizeControllerSize, height: resizeControllerSize };
+
+  // middle-left
+  cx = x - resizeControllerSize / 2;
+  cy += height / 2;
+  fillRect(cx, cy, resizeControllerSize, resizeControllerSize, resizeControllerColor);
+  resizeControllerColorPos['middle-left'] = { x: cx, y: cy, width: resizeControllerSize, height: resizeControllerSize };
+  
+  // middle-center
+  cx += width / 2;
+  fillRect(cx, cy, resizeControllerSize, resizeControllerSize, resizeControllerColor);
+  resizeControllerColorPos['middle-center'] = { x: cx, y: cy, width: resizeControllerSize, height: resizeControllerSize };
+
+  // middle-right
+  cx += width / 2;
+  fillRect(cx, cy, resizeControllerSize, resizeControllerSize, resizeControllerColor);
+  resizeControllerColorPos['middle-right'] = { x: cx, y: cy, width: resizeControllerSize, height: resizeControllerSize };
+
+  // bottom-left
+  cx = x - resizeControllerSize / 2;
+  cy += height / 2;
+  fillRect(cx, cy, resizeControllerSize, resizeControllerSize, resizeControllerColor);
+  resizeControllerColorPos['bottom-left'] = { x: cx, y: cy, width: resizeControllerSize, height: resizeControllerSize };
+
+  // bottom-center
+  cx += width / 2;
+  fillRect(cx, cy, resizeControllerSize, resizeControllerSize, resizeControllerColor);
+  resizeControllerColorPos['bottom-center'] = { x: cx, y: cy, width: resizeControllerSize, height: resizeControllerSize };
+
+  // bottom-right
+  cx += width / 2;
+  fillRect(cx, cy, resizeControllerSize, resizeControllerSize, resizeControllerColor);
+  resizeControllerColorPos['bottom-right'] = { x: cx, y: cy, width: resizeControllerSize, height: resizeControllerSize };
+}
+
+function resizeRect(rect, resizeState, dx, dy) {
+  const { x, y, width, height } = rect;
+
+  if (resizeState === 'bottom-right') {
+    rect.width += dx;
+    rect.height += dy;
+  } else if (resizeState === 'bottom-center') {
+    rect.height += dy;
+  } else if (resizeState === 'bottom-left') {
+    rect.x += dx;
+    rect.width -= dx;
+    rect.height += dy;
+  } else if (resizeState === 'middle-right') {
+    rect.width += dx;
+  } else if (resizeState === 'middle-left') {
+    rect.x += dx;
+    rect.width -= dx;
+  } else if (resizeState === 'top-right') {
+    rect.y += dy;
+    rect.width += dx;
+    rect.height -= dy;
+  } else if (resizeState === 'top-center') {
+    rect.y += dy;
+    rect.height -= dy;
+  } else if (resizeState === 'top-left') {
+    rect.x += dx;
+    rect.width -= dx;
+    rect.y += dy;
+    rect.height -= dy;
+  } else if (resizeState === 'middle-center') {
+    rect.x += dx;
+    rect.y += dy;
+  }
+}
+
+function clearCanvas() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function strokeRect(x, y, width, height, color) {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.strokeStyle = color;
+  ctx.strokeRect(x, y, width, height);
+}
+
+function fillRect(x, y, width, height, color) {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, width, height);
+}
+
+function updateInputArea() {
+  const inputArea = document.getElementById('input-area');
+  if (selectedRectIdx === -1) {
+    inputArea.style.display = 'none'; 
+    return;
+  }else{
+    inputArea.style.display = 'block';
+  }
+
+  const rect = rects[selectedRectIdx];
+  document.getElementById('x').value = rect.x;
+  document.getElementById('y').value = rect.y;
+  document.getElementById('w').value = rect.width;
+  document.getElementById('h').value = rect.height;
+  document.getElementById('fillColor').value = rect.color;
+}
+
+function isInsideRect(rect, mousePos) {
+  const { x, y, width, height } = rect;
+  const mouseX = mousePos.x;
+  const mouseY = mousePos.y;
+  return x <= mouseX && mouseX <= x + width && y <= mouseY && mouseY <= y + height;
+}
+
+</script>
+
+<body onload="init()">
+  <canvas id="canvas"></canvas>
+  <div id="input-area">
+    <div class="input-wapper">
+      <span class="input-label">x</span>  
+      <input type="number" id="x">
+    </div>
+    <div class="input-wapper">
+      <span class="input-label">y</span>  
+      <input type="number" id="y">
+    </div>
+    <div class="input-wapper">
+      <span class="input-label">width</span>  
+      <input type="number" id="w">
+    </div>
+    <div class="input-wapper">
+      <span class="input-label">height</span>  
+      <input type="number" id="h">
+    </div>
+    <div class="input-wapper">
+      <span class="input-label">Fill Color</span>  
+      <input type="color" id="fillColor" value="#0000ff">
+    </div>
+  </div>
+</body>
+
+</html>
