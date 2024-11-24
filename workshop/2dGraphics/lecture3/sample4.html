@@ -1,0 +1,114 @@
+
+<html></html>
+
+<style>
+#canvas {
+  border: 1px solid #000;
+  margin-bottom: 10px;
+}
+.label{
+  display: inline-block;
+  width: 50px;
+}
+.value{
+  width: 200px;
+}
+
+</style>
+
+<script>
+let lon = 135.520
+let lat = 34.686
+let z = 6
+let imgSrcIdx = 0
+const imgSrcList = [
+  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
+  'https://cyberjapandata.gsi.go.jp/xyz/lndst/{z}/{x}/{y}.png',  
+]
+
+async function init() {
+  updateImage()
+
+  const lonInput = document.getElementById('lon')
+  lonInput.value = lon
+  lonInput.addEventListener('change', (e) => {
+    lon = Number(e.target.value)
+    updateImage()
+  })
+
+  const latInput = document.getElementById('lat')
+  latInput.value = lat
+  latInput.addEventListener('change', (e) => {
+    lat = Number(e.target.value)
+    updateImage()
+  })
+
+  const zInput = document.getElementById('z')
+  zInput.value = z
+  zInput.addEventListener('change', (e) => {
+    z = Number(e.target.value)
+    updateImage()
+  })
+
+  const imgSrc = document.getElementById('imgSrc')
+  imgSrc.addEventListener('change', (e) => {
+    imgSrcIdx = Number(e.target.value)
+    updateImage()
+  })
+}
+
+function updateImage() {
+  const {x, y} = lonlat2tile(lon, lat, z)
+  const img = document.createElement('img')
+  img.onload = () => {
+    draw (img)
+  }
+  img.src = imgSrcList[imgSrcIdx].replace('{x}', x).replace('{y}', y).replace('{z}', z)
+}
+
+function draw (img) {
+  const canvas = document.getElementById('canvas')
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, 0, 0)
+}
+
+function tile2lonlat(x, y, z) {
+  const n = Math.pow(2, z)
+  const lon = x / n * 360 - 180
+  const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI
+  return { lon, lat }
+}
+
+function lonlat2tile(lon, lat, z) {
+  const x = Math.floor((lon + 180) / 360 * Math.pow(2, z))
+  const y = Math.abs(Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, z)))
+  return { x, y }
+}
+</script>
+
+<body onload="init()">
+  <canvas id="canvas" width="256" height="256"></canvas>
+  <div>
+    <span class="label">lon</span>
+    <input class="value" type="number" step="0.1" id="lon">
+  </div>
+  <div>
+    <span class="label">lat</span>
+    <input class="value" type="number" step="0.1" id="lat">
+  </div>
+  <div>
+    <span class="label">z</span>
+    <input class="value" type="number" id="z">
+  </div>
+  <div>
+    <span class="label">src</span>
+    <select class="value" id="imgSrc">
+      <option value="0">OpenStreetMap</option>
+      <option value="1">国土地理院（標準地図）</option>
+      <option value="2">国土地理院（写真）</option>
+    </select>
+  </div>
+</body>
+
+</html>
