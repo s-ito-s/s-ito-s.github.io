@@ -1,0 +1,295 @@
+<html>
+
+<style>
+#canvas {
+  width: 100%;
+  height: 100%;
+}
+</style>
+
+<script>
+const TILE_SERVER_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+let worldPos = { x: 0.875, y:0.395 }
+let rate = 0.000005;
+let isMouseDown = false;
+let mousePos = { x: 0, y: 0 };
+let showGrid = false;
+let tileList = [];
+
+function init() {
+  const canvas = document.getElementById('canvas');
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+
+  canvas.addEventListener('mousedown', (e) => {
+    isMouseDown = true;
+    mousePos = { x: e.offsetX, y: e.offsetY };
+  })
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (isMouseDown) {
+      const newPos = { x: e.offsetX, y: e.offsetY };
+      worldPos = {
+        x: worldPos.x - (newPos.x - mousePos.x) * rate,
+        y: worldPos.y - (newPos.y - mousePos.y) * rate,
+      };
+      mousePos = newPos;
+      updateTileList();
+      drawTileList();
+    }
+  })
+
+  canvas.addEventListener('mouseup', (e) => {
+    isMouseDown = false;
+  })
+
+  canvas.addEventListener('wheel', (e) => {
+    const mousePos = { x: e.offsetX, y: e.offsetY };
+    const delta = e.deltaY;
+    const prevRate = rate;
+    if (delta > 0) {
+      rate *= 1.05;
+    } else {
+      rate *= 0.95;
+    }
+    worldPos.x = worldPos.x + (prevRate - rate) * mousePos.x;
+    worldPos.y = worldPos.y + (prevRate - rate) * mousePos.y;
+    updateTileList();
+    drawTileList();
+  })
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'g') {
+      showGrid = !showGrid;
+      drawTileList();
+    }
+  })
+
+  window.addEventListener('resize', resize);
+
+  updateTileList();
+}
+
+function resize () {
+  const canvas = document.getElementById('canvas');
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  updateTileList();
+  drawTileList();
+}
+
+function updateTileList() {
+  const newTileList = calcNewTileList();
+  removeTile(newTileList)
+  requestTiles(newTileList)
+  tileList = tileList.sort((t1, t2) => {
+    return t1.z - t2.z;
+  });  
+}
+
+function calcNewTileList() {
+  const canvas = document.getElementById('canvas');
+  const tileZLevel = calcTileZLevel();
+  const leftTopTile = world2tile(worldPos, tileZLevel);
+  const leftTopTilePos = tile2world(leftTopTile.x, leftTopTile.y, tileZLevel);
+  const rightBottomWorldPos = canvas2world({x:canvas.width, y:canvas.height});
+  const tileSize = Math.pow(2, -tileZLevel);
+
+  const newTileList = [];
+  for (let y = 0; rightBottomWorldPos.y > leftTopTilePos.y + tileSize * y; ++y) {
+    for (let x = 0; rightBottomWorldPos.x > leftTopTilePos.x + tileSize * x; ++x) {
+      newTileList.push({
+        x: leftTopTile.x + x, 
+        y: leftTopTile.y + y,
+        z: tileZLevel,
+      });
+    }
+  }
+
+  return newTileList;
+}
+
+function removeTile(newTileList) {
+  const tileZLevel = calcTileZLevel();
+
+  // 画面外のタイルを削除
+  tileList = tileList.filter((t) => {
+    if (tileZLevel !== t.z) {
+      // 穴あき防止のため、現在のZレベルとZレベルが違うタイルは残す
+      return true;
+    }
+    return newTileList.some((nt) => {
+      return t.x === nt.x && t.y === nt.y && t.z === tileZLevel;
+    });
+  });
+
+  // 現在のZレベルのタイルキーを取得
+  const currentZTileKeyList = tileList.filter((t) => t.z === tileZLevel).map((t) => {
+    return calcTileKey(t.x, t.y, t.z);
+  });
+
+  // 子孫タイルを削除
+  tileList = tileList.filter((t) => {
+    if (t.z === tileZLevel) {
+      return true;
+    }
+    const key = calcTileKey(t.x, t.y, t.z);
+    if (currentZTileKeyList.some((k) => key.includes(k))) {
+      return false;
+    }
+    return true;
+  });
+
+  // 子タイルが4つ揃っている親タイルを削除
+  const parentTileKeyList = {};
+  for (const key of currentZTileKeyList) {
+    const parentTileKey = key.slice(0, key.length - 1);
+    if (parentTileKeyList[parentTileKey]) {
+      parentTileKeyList[parentTileKey].push(key);
+    }else{
+      parentTileKeyList[parentTileKey] = [key];
+    }
+  }
+  const deleteTileKeyList = Object.keys(parentTileKeyList).filter((key) => {
+    return parentTileKeyList[key] === 4;
+  });
+  tileList = tileList.filter((t) => {
+    const key = calcTileKey(t.x, t.y, t.z);
+    if (deleteTileKeyList.includes(key)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function requestTiles(newTileList) {
+  for (const tile of newTileList) {
+    const tileMax = Math.pow(2, tile.z);
+    if (tile.x < 0 || tileMax <= tile.x || tile.y < 0 || tileMax <=  tile.y) {
+      continue;
+    }
+    if (tileList.find(t => t.x === tile.x && t.y === tile.y && t.z === tile.z)) {
+      continue;
+    }
+    const img = new Image();
+    img.onload = () => {
+      drawTileList();
+    };
+    img.src = TILE_SERVER_URL
+      .replace('{z}', tile.z)
+      .replace('{x}', tile.x)
+      .replace('{y}', tile.y);
+    tileList.push({
+      x: tile.x,
+      y: tile.y,
+      z: tile.z,
+      img,
+    })
+  }
+}
+
+function drawTileList() {
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (const tile of tileList) {
+    const img = tile.img
+    if (img.complete === false) {
+      continue;
+    }
+    const wPos1 = tile2world(tile.x, tile.y, tile.z)
+    const wPos2 = tile2world(tile.x+1, tile.y+1, tile.z)
+    const cPos1 = world2canvas(wPos1);
+    const cPos2 = world2canvas(wPos2);
+    const size = cPos2.x - cPos1.x;
+    ctx.drawImage(img, cPos1.x, cPos1.y, size, size);
+
+    if (showGrid) {
+      ctx.strokeStyle = 'red';
+      ctx.strokeRect(cPos1.x, cPos1.y, size, size);
+      ctx.font = '12px serif';
+      ctx.fillStyle = 'red';
+      ctx.fillText(`${tile.z} / ${tile.y} / ${tile.x}`, cPos1.x + 5, cPos1.y + 17);
+      const key = calcTileKey(tile.x, tile.y, tile.z);
+      ctx.fillText(key, cPos1.x + 5, cPos1.y + 32);
+    }
+  }
+}
+
+function tile2world(x, y, z) {
+  const tileSize = Math.pow(2, -z)
+  return {
+    x: x * tileSize,
+    y: y * tileSize,
+  };
+}
+
+function world2tile(pos, z) {
+  const tileSize = Math.pow(2, -z)
+  return {
+    x: Math.floor(pos.x / tileSize),
+    y: Math.floor(pos.y / tileSize),
+  };
+}
+
+function canvas2world(pos) {
+  return {
+    x: pos.x * rate + worldPos.x,
+    y: pos.y * rate + worldPos.y,
+  };
+}
+
+function world2canvas(pos) {
+  return {
+    x: (pos.x - worldPos.x) / rate,
+    y: (pos.y - worldPos.y) / rate,
+  };
+}
+
+function calcTileZLevel() {
+  let tileZLevel = 0;
+  while(1) {
+    const wPos1 = tile2world(0, 0, tileZLevel)
+    const wPos2 = tile2world(1, 1, tileZLevel)
+    const cPos1 = world2canvas(wPos1);
+    const cPos2 = world2canvas(wPos2);
+    const size = cPos2.x - cPos1.x;
+    if (size < 256) {
+      break;
+    }
+    ++tileZLevel;
+  }
+  return tileZLevel;
+}
+
+function calcTileKey(x, y, z) {
+  let key = '';
+  for (let i = 0; z > i; ++i) {
+    const n0 = Math.pow(2, z - i);
+    const n1 = Math.pow(2, z - i - 1);
+    const rx = x % n0;
+    const ry = y % n0;
+    if (rx < n1) {
+      if (ry < n1) {
+        key += '0';
+      } else {
+        key += '2';
+      }
+    } else {
+      if (ry < n1) {
+        key += '1';
+      } else {
+        key += '3';
+      }
+    }
+  }
+  return key;
+}
+</script>
+
+<body onload="init()">
+  <canvas id="canvas"></canvas>
+</body>
+
+</html>
