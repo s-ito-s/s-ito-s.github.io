@@ -1,0 +1,134 @@
+<html>
+
+<style>
+#canvas {
+  border: 1px solid black;
+}
+</style>
+
+<script>
+const PADDING_TOP = 20;
+const PADDING_RIGHT = 20;
+
+const FONT_SIZE = 16;
+const X_LABEL_WIDTH = 60;
+const X_LABEL_OFFSET = 10;
+const Y_LABEL_HEIGHT = 50;
+const Y_LABEL_OFFSET = 10;
+const Y_GIRDS_COUNT = 10;
+const BAR_INTERVAL = 100;
+
+let isMouseDown = false;
+let mousePosX = 0;
+let canvasOffsetX = 0
+
+const values = [
+  { label: '新潟', value: 591 },
+  { label: '北海道', value: 540 },
+  { label: '秋田', value: 458 },
+  { label: '山形', value: 359 },
+  { label: '宮城', value: 344 },
+  { label: '福島', value: 327 },
+  { label: '茨城', value: 316 },
+  { label: '栃木', value: 283 },
+  { label: '千葉', value: 265 },
+  { label: '岩手', value: 249 },
+]
+
+function init () {
+  const canvas = document.getElementById('canvas');
+
+  canvas.addEventListener('mousedown', (e) => {
+    isMouseDown = true;
+    mousePosX = e.offsetX;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (isMouseDown) {
+      const dx = mousePosX - e.offsetX;
+      const barAreaWidth = canvas.width - PADDING_RIGHT - X_LABEL_WIDTH;
+      const maxX = values.length * BAR_INTERVAL - barAreaWidth;
+      canvasOffsetX = Math.max(0, Math.min(canvasOffsetX + dx, maxX));
+      mousePosX = e.offsetX;
+      draw();
+    }
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    isMouseDown = false;
+  });
+
+  draw();
+}
+
+function draw() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = `bold ${FONT_SIZE}px serif`;
+
+  const barAreaX = X_LABEL_WIDTH;
+  const barAreaY = PADDING_TOP;
+  const barAreaWidth = canvas.width - PADDING_RIGHT - X_LABEL_WIDTH;
+  const barAreaHeight = canvas.height - PADDING_TOP - Y_LABEL_HEIGHT;
+  const barAreaLeft = X_LABEL_WIDTH;
+  const barAreaBottom = PADDING_TOP + barAreaHeight;
+
+  const maxValue = Math.max(...values.map(v => v.value));
+  const maxDigits = maxValue.toString().length;
+  const maxBarValue = Math.pow(10, maxDigits)
+  const yScaleInterval = maxBarValue / Y_GIRDS_COUNT;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = '#999';
+  for (let i = 0; i <= Y_GIRDS_COUNT; i++) {
+    const y = barAreaBottom - barAreaHeight * i / Y_GIRDS_COUNT;
+    ctx.beginPath();
+    ctx.moveTo(barAreaLeft, y);
+    ctx.lineTo(barAreaLeft + barAreaWidth, y);
+    ctx.stroke();
+  }
+
+  const barWidth = BAR_INTERVAL * 0.5;
+  values.forEach((v, i) => {
+    const x = barAreaLeft + toCanvasPos(BAR_INTERVAL * i);
+
+    const barOffset = (BAR_INTERVAL - barWidth) / 2;
+    const barX = x + barOffset;
+    const barHeight = barAreaHeight * v.value / maxBarValue;
+    const barY = barAreaBottom - barHeight;
+    ctx.fillStyle = '#55f';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const labelX = x + BAR_INTERVAL / 2;
+    const labelY = barAreaBottom + Y_LABEL_OFFSET;
+    ctx.fillStyle = '#000';
+    ctx.fillText(v.label, labelX, labelY);
+  });
+
+  ctx.clearRect(0, 0, X_LABEL_WIDTH, canvas.height);
+  ctx.clearRect(canvas.width - PADDING_RIGHT, 0, PADDING_RIGHT, canvas.height);
+  ctx.strokeRect(barAreaX, barAreaY, barAreaWidth, barAreaHeight);
+
+  ctx.strokeStyle = '#999';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const labelYLeft = barAreaLeft - Y_LABEL_OFFSET;
+  for (let i = 0; i <= Y_GIRDS_COUNT; i++) {
+    const y = barAreaBottom - barAreaHeight * i / Y_GIRDS_COUNT;
+    ctx.fillText(yScaleInterval * i, labelYLeft, y);
+  }
+}
+
+function toCanvasPos (x) {
+  return x - canvasOffsetX;
+}
+</script>
+
+<body onload='init()'>
+  <canvas id='canvas' width='640' height='500'></canvas>
+</body>
+
+</html>

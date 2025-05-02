@@ -1,0 +1,391 @@
+<html>
+
+<style>
+  canvas {
+    border: 1px solid black;
+  }
+</style>
+
+<script>
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 600;
+
+const MARGIN_TOP = 30;
+const MARGIN_LEFT = 30;
+const Y_AXIS_SCALE_WIDTH = 50;
+const X_AXIS_SCALE_HEIGHT = 50;
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+const ONE_MINUTE_MS = 60 * 1000;
+
+const TIME_PER_PIX_MIN = 1000;
+const TIME_PER_PIX_THRESHOLD0 = 3000;
+const TIME_PER_PIX_THRESHOLD1 = 7000;
+const TIME_PER_PIX_THRESHOLD2 = 50000;
+const TIME_PER_PIX_THRESHOLD3 = 250000;
+const TIME_PER_PIX_MAX = 800000;
+
+const TEXT_COLOR = '#111';
+const BG_COLOR = '#fff';
+const LINE_COLOR = '#111';
+const BAR_COLOR = '#6af';
+const Y_SCALE_LINE_COLOR = '#ddd';
+
+const ANIMATION_DURATION = 400;
+
+const DATA_COUNT = 20000;
+const DATA_DURATION = 10 * 24 * 60 * 60 * 1000;
+
+let currentTimeMs = new Date().getTime();
+let barData = []
+let maxYValue = 0
+let scaleIntervalTimeMs = TEN_MINUTES_MS;
+let timePerPix = 20000;
+let prevBarData = []
+let prevMaxYValue = 0
+let prevScaleIntervalTimeMs = scaleIntervalTimeMs
+let prevTimePerPix = 0
+
+let isMouseDown = false;
+let mouseDownX = 0;
+let isDuringAnimation = false
+
+// ランダムなデータを生成
+const randomData = []
+for (let i = 0; DATA_COUNT > i; ++i) {
+  const d = Math.floor(Math.random() * DATA_DURATION);
+  const t = new Date(currentTimeMs + d);
+  randomData.push(t);
+}
+const data = randomData.sort( (a, b) => {
+  return a.getTime() - b.getTime();
+})
+
+function init() {
+  const canvas = document.getElementById('canvas');
+
+  canvas.addEventListener('mousedown', (e) => {
+    mouseDownX = e.offsetX;
+    isMouseDown = true;
+  });
+  
+  canvas.addEventListener('mousemove', (e) => {
+    if (isMouseDown) {
+      const dx = e.offsetX - mouseDownX;
+      currentTimeMs -= dx * timePerPix;
+      mouseDownX = e.offsetX;
+      draw(1);
+    }
+  });
+  
+  canvas.addEventListener('mouseup', (e) => {
+    isMouseDown = false;
+  });
+  
+  canvas.addEventListener('mousewheel', (e) => {
+    const delta = e.deltaY;
+    const scale = delta > 0 ? 1.1 : 0.9;
+    const newTimePerPix = Math.min(TIME_PER_PIX_MAX, Math.max(TIME_PER_PIX_MIN, timePerPix * scale));
+    const prevTimePerPix = timePerPix;
+    const x = e.offsetX - Y_AXIS_SCALE_WIDTH;
+    currentTimeMs += (prevTimePerPix - newTimePerPix) * x;
+    timePerPix = newTimePerPix;
+
+    let newScaleIntervalTimeMs = scaleIntervalTimeMs
+    if (timePerPix < TIME_PER_PIX_THRESHOLD1) {
+      newScaleIntervalTimeMs = ONE_MINUTE_MS;
+    } else if (timePerPix < TIME_PER_PIX_THRESHOLD2) {
+      newScaleIntervalTimeMs = TEN_MINUTES_MS;
+    } else {
+      newScaleIntervalTimeMs = ONE_HOUR_MS;
+    }
+
+    if (newScaleIntervalTimeMs !== scaleIntervalTimeMs) {
+      if (!isDuringAnimation) {
+        prevScaleIntervalTimeMs = scaleIntervalTimeMs
+        scaleIntervalTimeMs = newScaleIntervalTimeMs
+        updateBarData()
+        startAnimation()
+      }
+    }else{
+      if (!isDuringAnimation) {
+        draw(1);
+      }
+    }
+  });
+
+  updateBarData()
+  draw(1);
+}
+
+function startAnimation() {
+  let rate = 0
+  let animationStartTimeMs = new Date().getTime()
+  isDuringAnimation = true
+
+  const f = () => {
+    let currentTimeMs = new Date().getTime()
+    const rate = Math.min((currentTimeMs - animationStartTimeMs) / ANIMATION_DURATION, 1)
+    draw(smoothstep(rate))
+    if (rate < 1) {
+      requestAnimationFrame(f)
+    }else{
+      isDuringAnimation = false
+    }
+  }
+  f()
+}
+
+function updateBarData() {
+  prevBarData = [...barData]
+  prevMaxYValue = maxYValue
+  prevTimePerPix = timePerPix
+
+  const dataStartTimeMs = data[0].getTime();
+  const barStartTimeMs = Math.floor(dataStartTimeMs / scaleIntervalTimeMs) * scaleIntervalTimeMs;
+  const dataEndTimeMs = data[data.length - 1].getTime();
+  const dataDuration = dataEndTimeMs - dataStartTimeMs;
+  const barCount = Math.floor(dataDuration / scaleIntervalTimeMs) + 1;
+  barData = new Array(barCount).fill(0);
+  for (let i = 0; data.length > i; ++i) {
+    const t = data[i];
+    const idx = Math.floor((t.getTime() - barStartTimeMs) / scaleIntervalTimeMs);
+    if (0 <= idx && idx < barData.length) {
+      barData[idx] += 1;
+    }
+  }
+
+  const maxBarValue = Math.max(...barData);
+  const maxDigitNumber = Number(maxBarValue.toString()[0]);
+  const maxDigit = maxBarValue.toString().length;
+  maxYValue = 
+    maxDigitNumber >= 5 ?
+      Math.pow(10, maxDigit) : 
+    maxDigitNumber >= 2 ?
+      Math.pow(10, maxDigit - 1) * 5 :
+      Math.pow(10, maxDigit - 1) * 2
+}
+
+function draw(rate) {
+  // console.log(rate)
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = CANVAS_WIDTH;
+  canvas.height = CANVAS_HEIGHT;
+
+  // グラフの描画領域を設定
+  const xGraph = Y_AXIS_SCALE_WIDTH;
+  const yGraph = MARGIN_TOP;
+  const wGraph = CANVAS_WIDTH - Y_AXIS_SCALE_WIDTH - MARGIN_LEFT;
+  const hGraph = CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT - MARGIN_TOP;
+
+  // はじめに背景を塗りつぶす
+  ctx.fillStyle = BG_COLOR;
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  // Y軸の目盛り線を描画
+  for (let i = 0; 10 >= i; ++i) {
+    const zeroY = CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT;
+    let yScale = zeroY - hGraph / 10 * i;
+    if (rate < 1) {
+      const prevScaleValue = prevMaxYValue / 10 * i;
+      const prevYScale = zeroY - hGraph * prevScaleValue / maxYValue;
+      yScale = lerp(yScale, prevYScale, rate)
+      if (yScale < MARGIN_TOP) {
+        continue
+      }
+    }
+    ctx.strokeStyle = Y_SCALE_LINE_COLOR;
+    ctx.beginPath();
+    ctx.moveTo(Y_AXIS_SCALE_WIDTH, yScale);
+    ctx.lineTo(CANVAS_WIDTH - MARGIN_LEFT, yScale);
+    ctx.stroke();
+  }
+
+  // グラフのデータを描画
+  const scaleStartTimeMs = Math.floor(currentTimeMs / scaleIntervalTimeMs) * scaleIntervalTimeMs;
+  const scaleEndTimeMs = pos2time(wGraph);
+  let scaleTimeMs = scaleStartTimeMs;
+  while (scaleTimeMs < scaleEndTimeMs + scaleIntervalTimeMs) {
+    const x = time2pos(scaleTimeMs) + Y_AXIS_SCALE_WIDTH;
+
+    // 時間軸の目盛りを描画
+    let timeText = ''
+    const t = new Date(scaleTimeMs);
+    if (timePerPix < TIME_PER_PIX_THRESHOLD0 && t.getMinutes() % 5 === 0) {
+      const hour = String(t.getHours())
+      const min = String(t.getMinutes()).padStart(2, '0')
+      timeText = `${hour}:${min}`
+    } else if (timePerPix < TIME_PER_PIX_THRESHOLD1 && t.getMinutes() % 10 === 0) {
+      const hour = String(t.getHours())
+      const min = String(t.getMinutes()).padStart(2, '0')
+      timeText = `${hour}:${min}`
+    } else if(timePerPix < TIME_PER_PIX_THRESHOLD2 && t.getMinutes() === 0) {
+      const hour = String(t.getHours())
+      const min = String(t.getMinutes()).padStart(2, '0')
+      timeText = `${hour}:${min}`
+    } else if (timePerPix < TIME_PER_PIX_THRESHOLD3 && t.getHours() % 4 === 0 && t.getMinutes() === 0) {
+      const hour = String(t.getHours())
+      const min = String(t.getMinutes()).padStart(2, '0')
+      timeText = `${hour}:${min}`
+    } else if (t.getHours() === 0 && t.getMinutes() === 0) {
+      const month = String(t.getMonth() + 1)
+      const day = String(t.getDate())
+      timeText = `${month}/${day}`
+    }
+    if (timeText !== '') {
+      ctx.strokeStyle = Y_SCALE_LINE_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(Math.floor(x), MARGIN_TOP);
+      ctx.lineTo(Math.floor(x), CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT);
+      ctx.stroke();
+
+      ctx.fillStyle = TEXT_COLOR;
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(timeText, x, CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT / 2);
+    }
+
+    // 棒グラフを描画
+    const dataStartTimeMs = data[0].getTime();
+    if (rate < 1) {
+      if (scaleIntervalTimeMs < prevScaleIntervalTimeMs) {
+        const prevScaleTimeMs = Math.floor(scaleTimeMs / prevScaleIntervalTimeMs) * prevScaleIntervalTimeMs;
+        const prevX = time2pos(prevScaleTimeMs) + Y_AXIS_SCALE_WIDTH;
+        const prevBarStartTimeMs = Math.floor(dataStartTimeMs / prevScaleIntervalTimeMs) * prevScaleIntervalTimeMs;
+        const prevIdx = Math.floor((scaleTimeMs - prevBarStartTimeMs) / prevScaleIntervalTimeMs);
+        const prevValue = prevBarData[prevIdx]
+        const prevBarWidth = prevScaleIntervalTimeMs / prevTimePerPix * 0.5;
+        const prevBarHeight = prevValue / prevMaxYValue * hGraph;
+        const prevBarCenterX = prevX + prevBarWidth;
+        const prevBarCenterY = CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT - prevBarHeight / 2; 
+        
+        const newBarStartTimeMs = Math.floor(dataStartTimeMs / scaleIntervalTimeMs) * scaleIntervalTimeMs;
+        const newIdx = Math.floor((scaleTimeMs - newBarStartTimeMs) / scaleIntervalTimeMs);
+        const newValue = barData[newIdx];
+        const newBarWidth = scaleIntervalTimeMs / timePerPix * 0.5;
+        const newBarHeight = newValue / maxYValue * hGraph;
+        const newBarCenterX = x + newBarWidth;
+        const newBarCenterY = CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT - newBarHeight / 2; 
+
+        const barWidth = lerp(prevBarWidth, newBarWidth, rate)
+        const barHeight = lerp(prevBarHeight, newBarHeight, rate)    
+        const barCenterX = lerp(prevBarCenterX, newBarCenterX, rate)
+        const barCenterY = lerp(prevBarCenterY, newBarCenterY, rate)
+        const barX = barCenterX - barWidth / 2;
+        const barY = barCenterY - barHeight / 2;
+        ctx.fillStyle = BAR_COLOR;
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+      }else{
+        const newBarStartTimeMs = Math.floor(dataStartTimeMs / scaleIntervalTimeMs) * scaleIntervalTimeMs;
+        const newIdx = Math.floor((scaleTimeMs - newBarStartTimeMs) / scaleIntervalTimeMs);
+        const newValue = barData[newIdx];
+        const newBarWidth = scaleIntervalTimeMs / timePerPix * 0.5;
+        const newBarHeight = newValue / maxYValue * hGraph;
+        const newBarCenterX = x + newBarWidth;
+        const newBarCenterY = CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT - newBarHeight / 2; 
+
+        const prevBarCount = Math.floor(scaleIntervalTimeMs / prevScaleIntervalTimeMs)
+        for (let i = 0; prevBarCount > i; ++i) {
+          const prevScaleTimeMs = scaleTimeMs + i * prevScaleIntervalTimeMs
+          const prevX = time2pos(prevScaleTimeMs) + Y_AXIS_SCALE_WIDTH;
+          const prevBarStartTimeMs = Math.floor(dataStartTimeMs / prevScaleIntervalTimeMs) * prevScaleIntervalTimeMs;
+          const prevIdx = Math.floor((prevScaleTimeMs - prevBarStartTimeMs) / prevScaleIntervalTimeMs);
+          const prevValue = prevBarData[prevIdx]
+          const prevBarWidth = prevScaleIntervalTimeMs / prevTimePerPix * 0.5;
+          const prevBarHeight = prevValue / prevMaxYValue * hGraph;
+          const prevBarCenterX = prevX + prevBarWidth;
+          const prevBarCenterY = CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT - prevBarHeight / 2; 
+
+          const barWidth = lerp(prevBarWidth, newBarWidth, rate)
+          const barHeight = lerp(prevBarHeight, newBarHeight, rate)
+          const barCenterX = lerp(prevBarCenterX, newBarCenterX, rate)
+          const barCenterY = lerp(prevBarCenterY, newBarCenterY, rate)
+          const barX = barCenterX - barWidth / 2;
+          const barY = barCenterY - barHeight / 2;
+          ctx.fillStyle = BAR_COLOR;
+          ctx.fillRect(barX, barY, barWidth, barHeight);
+        }
+      }
+    } else {
+      const barStartTimeMs = Math.floor(dataStartTimeMs / scaleIntervalTimeMs) * scaleIntervalTimeMs;
+      const idx = Math.floor((scaleTimeMs - barStartTimeMs) / scaleIntervalTimeMs);
+      if (0 <= idx && idx < barData.length) {
+        const value = barData[idx];
+        const barWidth = scaleIntervalTimeMs / timePerPix * 0.5;
+        const barHeight = value / maxYValue * hGraph;
+        const barX = x + barWidth / 2;
+        const barY = CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT - barHeight;
+        ctx.fillStyle = BAR_COLOR;
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+      }
+    }
+
+    // 時間を進める
+    scaleTimeMs += scaleIntervalTimeMs;
+  }
+
+  // Y軸の目盛り領域を塗りつぶす
+  ctx.fillStyle = BG_COLOR;
+  ctx.fillRect(0, 0, Y_AXIS_SCALE_WIDTH, CANVAS_HEIGHT);  
+  ctx.fillRect(CANVAS_WIDTH - MARGIN_LEFT, 0, MARGIN_LEFT, CANVAS_HEIGHT);  
+
+  // Y軸の目盛りテキストを描画
+  for (let i = 0; 10 >= i; ++i) {
+    const zeroY = CANVAS_HEIGHT - X_AXIS_SCALE_HEIGHT;
+    let yScale = zeroY - hGraph / 10 * i;
+    let yScaleText = maxYValue / 10 * i;
+    if (rate < 1) {
+      const prevScaleValue = prevMaxYValue / 10 * i;
+      const prevYScale = zeroY - hGraph * prevScaleValue / maxYValue;
+      yScale = lerp(yScale, prevYScale, rate)
+      yScaleText = prevScaleValue
+      if (yScale < MARGIN_TOP) {
+        continue
+      }
+    }    
+    ctx.fillStyle = TEXT_COLOR;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(yScaleText, Y_AXIS_SCALE_WIDTH - 10, yScale);
+  }
+
+  // グラフの枠を描画
+  ctx.strokeStyle = LINE_COLOR;
+  const xFrame = xGraph;
+  const yFrame = yGraph;
+  const wFrame = wGraph;
+  const hFrame = hGraph;
+  ctx.strokeRect(xFrame, yFrame, wFrame, hFrame);
+
+  // デバッグ用の情報を描画
+  // ctx.fillStyle = TEXT_COLOR;
+  // ctx.textAlign = 'left';
+  // ctx.textBaseline = 'top';
+  // ctx.fillText(timePerPix, xGraph + 20, yGraph + 20);
+}
+
+function time2pos(timeMs) {
+  return (timeMs - currentTimeMs) / timePerPix;
+}
+
+function pos2time(pos) {
+  return pos * timePerPix + currentTimeMs;
+}
+
+function smoothstep(x) {
+  return x * x * (3.0 - 2.0 * x);
+}
+
+function lerp(v1, v2, r) {
+  return (1 - r) * v1 + r * v2;
+}
+</script>
+
+<body onload="init()">
+  <canvas id="canvas" width="800" height="600"></canvas>
+</body>
+
+</html>

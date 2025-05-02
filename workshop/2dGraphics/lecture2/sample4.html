@@ -1,0 +1,90 @@
+<html>
+
+<style>
+#canvas {
+  border: 1px solid black;
+}
+</style>
+
+<script>
+const PADDING_TOP = 20;
+const PADDING_RIGHT = 20;
+
+const FONT_SIZE = 16;
+const X_LABEL_WIDTH = 60;
+const X_LABEL_OFFSET = 10;
+const Y_LABEL_HEIGHT = 50;
+const Y_LABEL_OFFSET = 10;
+const Y_GIRDS_COUNT = 10;
+
+const values = [
+  { label: '新潟', value: 591 },
+  { label: '北海道', value: 540 },
+  { label: '秋田', value: 458 },
+  { label: '山形', value: 359 },
+  { label: '宮城', value: 344 },
+  { label: '福島', value: 327 },
+  { label: '茨城', value: 316 },
+  { label: '栃木', value: 283 },
+  { label: '千葉', value: 265 },
+  { label: '岩手', value: 249 },
+]
+
+function init () {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const x = X_LABEL_WIDTH;
+  const y = PADDING_TOP;
+  const width = canvas.width - PADDING_RIGHT - X_LABEL_WIDTH;
+  const height = canvas.height - PADDING_TOP - Y_LABEL_HEIGHT;
+  ctx.strokeRect(x, y, width, height);
+
+  const maxValue = Math.max(...values.map(v => v.value));
+  const maxDigits = maxValue.toString().length;
+  const maxBarValue = Math.pow(10, maxDigits)
+  const yScaleInterval = maxBarValue / Y_GIRDS_COUNT;
+  const xScaleInterval = width / values.length;
+
+  ctx.strokeStyle = '#999';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${FONT_SIZE}px serif`;
+  const barAreaLeft = X_LABEL_WIDTH;
+  const barAreaBottom = PADDING_TOP + height;
+  const labelYLeft = barAreaLeft - Y_LABEL_OFFSET;
+  for (let i = 0; i <= Y_GIRDS_COUNT; i++) {
+    const y = barAreaBottom - height * i / Y_GIRDS_COUNT;
+    ctx.beginPath();
+    ctx.moveTo(barAreaLeft, y);
+    ctx.lineTo(barAreaLeft + width, y);
+    ctx.stroke();
+    ctx.fillText(yScaleInterval * i, labelYLeft, y);
+  }
+  
+  const barWidth = xScaleInterval * 0.5;
+  values.forEach((v, i) => {
+    const x = barAreaLeft + xScaleInterval * i;
+
+    const barOffset = (xScaleInterval - barWidth) / 2;
+    const barX = x + barOffset;
+    const barHeight = height * v.value / maxBarValue;
+    const barY = barAreaBottom - barHeight;
+    ctx.fillStyle = '#55f';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const labelX = x + xScaleInterval / 2;
+    const labelY = barAreaBottom + Y_LABEL_OFFSET;
+    ctx.fillStyle = '#000';
+    ctx.fillText(v.label, labelX, labelY);
+  });
+}
+</script>
+
+<body onload='init()'>
+  <canvas id='canvas' width='800' height='500'></canvas>
+</body>
+
+</html>
