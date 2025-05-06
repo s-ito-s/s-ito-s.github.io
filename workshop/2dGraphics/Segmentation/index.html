@@ -1,0 +1,505 @@
+<html>
+
+<style>
+body {
+  margin: 0;
+}
+
+#main {
+  display: flex;
+}
+
+#functionPanel {
+  width: calc(100% - 20px);
+  height: 70px;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f0f0f0;
+}
+
+#editToolPanel {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+#editorPanel {
+  display: flex;
+  flex-direction: row;
+  height: calc(100% - 70px);
+}
+
+#canvas {
+  width: 100%;
+  cursor: grab;
+}
+</style>
+<script>
+let img = null
+let isMouseDown = false;
+let mousePos = { x: 0, y: 0 };
+let imgPos = { x: -20, y: -20 };
+let scale = 1;
+let isEditMode = false;
+let segmentationImageData = null;
+let segmentationImage = null;
+let segmentationCanvas = null;
+let toolType = 'pen';
+let size = 10;
+let color = { r: 0, g: 0, b: 255 };
+let showGrid = false;
+let isMouseOut = true;
+let keyF = false;
+let keyE = false;
+let keyCtrl = false;
+
+function init() {
+  const canvas = document.getElementById('canvas');
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  const ctx = canvas.getContext('2d');
+
+  canvas.addEventListener('mousedown', function(event) {
+    isMouseDown = true;
+    mousePos = { x: event.offsetX, y: event.offsetY };
+    if (!isEditMode || keyCtrl) {
+      canvas.style.cursor = 'grabbing';
+    } else {
+      const pixelPos = canvas2img(mousePos);
+      segmentation(Math.floor(pixelPos.x), Math.floor(pixelPos.y))
+    }
+  });
+
+  canvas.addEventListener('mousemove', function(event) {
+    const newMousePos = { x: event.offsetX, y: event.offsetY };
+    if (isMouseDown) {
+      if (!isEditMode || keyCtrl) {
+        canvas.style.cursor = 'grabbing';
+        imgPos.x -= (newMousePos.x - mousePos.x) / scale;
+        imgPos.y -= (newMousePos.y - mousePos.y) / scale;
+      } else {
+        const pixelPos = canvas2img(newMousePos);
+        segmentation(Math.floor(pixelPos.x), Math.floor(pixelPos.y)) 
+      }
+    }
+    mousePos = newMousePos;
+    draw();
+  });
+
+  canvas.addEventListener('mouseup', function(event) {
+    isMouseDown = false;
+    if (isEditMode) {
+      canvas.style.cursor = 'none';
+    } else {
+      canvas.style.cursor = 'grab';
+    }
+  });
+
+  canvas.addEventListener('mouseenter', function(event) {
+    isMouseOut = false;
+  });
+
+  canvas.addEventListener('mouseout', function(event) {
+    isMouseOut = true;
+    draw();
+  });
+
+  canvas.addEventListener('wheel', function(event) {
+    event.preventDefault();
+    const oldScale = scale;
+    if (event.deltaY > 0) {
+      scale *= 0.9;
+    }else{
+      scale *= 1.1;
+    }
+    imgPos.x += (1/oldScale - 1/scale) * event.offsetX;
+    imgPos.y += (1/oldScale - 1/scale) * event.offsetY;
+    draw();
+  });
+
+  const editModeInput = document.getElementById('editMode');
+  editModeInput.addEventListener('change', function(event) {
+    isEditMode = event.target.checked;
+    if (isEditMode) {
+      canvas.style.cursor = 'none';
+    } else {
+      canvas.style.cursor = 'grab';
+    }
+  });
+
+  const toolInput = document.getElementById('tool');
+  tool.addEventListener('change', function(event) {
+    toolType = event.target.value
+  });
+
+  const sizeInput = document.getElementById('size');
+  sizeInput.addEventListener('change', function(event) {
+    size = Number(event.target.value);
+  });
+
+  const colorInput = document.getElementById('color');
+  colorInput.addEventListener('change', function(event) {
+    const hecColor = event.target.value;
+    const hex = hecColor.substring(1);
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    color = { r, g, b };
+  });
+
+  const gridInput = document.getElementById('grid');
+  gridInput.addEventListener('change', function(event) {
+    showGrid = event.target.checked;
+    draw();
+  });
+
+  window.addEventListener('keydown', function(event) {
+    if (event.key === 'ArrowUp') {
+      size = Math.max(1, size + 1);
+      sizeInput.value = size;
+      draw();
+    } else if (event.key === 'ArrowDown') {
+      size = Math.max(1, size - 1);
+      sizeInput.value = size;    
+      draw(); 
+    } else if (event.key === 'g') {
+      showGrid = !showGrid;
+      gridInput.checked = showGrid;
+      draw();
+    } else if (event.key === 'f') {
+      keyF = !keyF;
+      if (keyF) {
+        canvas.style.cursor = 'none';
+      } else {
+        canvas.style.cursor = 'grab';
+      }
+      draw();
+
+    } else if (event.key === 'e') {
+      const editModeInput = document.getElementById('editMode');
+      isEditMode = !isEditMode;
+      editModeInput.checked = isEditMode;
+      if (isEditMode) {
+        canvas.style.cursor = 'none';
+      } else {
+        canvas.style.cursor = 'grab';
+      }
+      draw();
+    } else if (event.key === 'Control') {
+      keyCtrl = true;
+      canvas.style.cursor = 'grab';
+      draw();
+    }
+  });
+
+  window.addEventListener('keyup', function(event) {
+    if (event.key === 'Control') {
+      keyCtrl = false;
+      if (isEditMode) {
+        canvas.style.cursor = 'none';
+      } else {
+        canvas.style.cursor = 'grab';
+      }
+      draw();
+    }
+  });
+
+  const saveButton = document.getElementById('save');
+  saveButton.addEventListener('click', function() {
+    const link = document.createElement('a');
+    link.download = 'segmentation.json';
+    const segmentationData = segmentationCanvas.getContext('2d').getImageData(0, 0, img.width, img.height);
+    console.log(segmentationData);
+    const width = segmentationData.width;
+    const height = segmentationData.height;
+    const colors = []
+    for (let i = 0; i < segmentationData.data.length; i += 4) {
+      const r = segmentationData.data[i];
+      const g = segmentationData.data[i + 1];
+      const b = segmentationData.data[i + 2];
+      colors.push({ r, g, b });
+    }
+    const json = JSON.stringify({width, height, colors});
+    const blob = new Blob([json], { type: 'application/json' });
+    link.href = URL.createObjectURL(blob);
+    link.click();
+  });
+
+  window.addEventListener('resize', resizeCanvas);
+
+  loadImage('./3033460736_8c93d8bf4d_z.jpg');
+
+  draw()
+}
+
+function resizeCanvas() {
+  const canvas = document.getElementById('canvas');
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  draw();
+}
+
+function draw() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'gray';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (img && segmentationCanvas) {
+    ctx.imageSmoothingEnabled = false;
+    const canvasPos = img2canvas({ x: 0, y: 0 });
+    const dx = canvasPos.x
+    const dy = canvasPos.y
+    const dWidth = img.width * scale
+    const dHeight = img.height * scale 
+    ctx.drawImage(img, 0, 0, img.width, img.height, dx, dy, dWidth, dHeight);
+    ctx.drawImage(segmentationCanvas, 0, 0, img.width, img.height, dx, dy, dWidth, dHeight);
+  }
+
+  if (!isMouseOut && isEditMode && !keyCtrl) {
+    const pixelPos = { x: 0, y: 0 };
+    const mouseCanvasPos = canvas2img(mousePos);
+    pixelPos.x = Math.floor(mouseCanvasPos.x) - Math.floor(size / 2);
+    pixelPos.y = Math.floor(mouseCanvasPos.y) - Math.floor(size / 2);
+    const pixelCanvasPos = img2canvas(pixelPos);
+    if (toolType === 'pen') {
+      ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, 0.5)`;
+      ctx.fillRect(pixelCanvasPos.x, pixelCanvasPos.y, scale * size, scale * size);
+      ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b})`;
+      ctx.strokeRect(pixelCanvasPos.x, pixelCanvasPos.y, scale * size, scale * size);
+    }else if (toolType === 'penCircle') {
+      ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, 0.5)`;
+      ctx.beginPath();
+      ctx.arc(pixelCanvasPos.x + scale * size / 2, pixelCanvasPos.y + scale * size / 2, scale * size / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b})`;
+      ctx.stroke();
+    }else if (toolType === 'eraser') {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.fillRect(pixelCanvasPos.x, pixelCanvasPos.y, scale * size, scale * size);
+      ctx.strokeStyle = 'rgb(0, 0, 0)';
+      ctx.strokeRect(pixelCanvasPos.x, pixelCanvasPos.y, scale * size, scale * size);
+    }else if (toolType === 'eraserCircle') {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.beginPath();
+      ctx.arc(pixelCanvasPos.x + scale * size / 2, pixelCanvasPos.y + scale * size / 2, scale * size / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgb(0, 0, 0)';
+      ctx.stroke();
+    }
+  }
+
+  const gridInterval = calcGridInterval();
+  const gridStartPosX = Math.floor(imgPos.x / gridInterval) * gridInterval;
+  const gridStartPosY = Math.floor(imgPos.y / gridInterval) * gridInterval;
+  let posX = gridStartPosX;
+  let posY = gridStartPosY;
+  if (showGrid) {
+    ctx.strokeStyle = 'rgb(50,50,50,0.5)';
+    ctx.lineWidth = 1;
+    while (canvas.width > (posX - imgPos.x) * scale) {
+      posX += gridInterval;
+      const canvasPosX = Math.floor((posX - imgPos.x) * scale);
+      ctx.beginPath();
+      ctx.moveTo(canvasPosX, 20);
+      ctx.lineTo(canvasPosX, canvas.height);
+      ctx.stroke();    
+    }
+    while (canvas.height > (posY - imgPos.y) * scale) {
+      posY += gridInterval;    
+      const canvasPosY = Math.floor((posY - imgPos.y) * scale);
+      if (canvasPosY < 20) continue;
+      ctx.beginPath();
+      ctx.moveTo(20, canvasPosY);
+      ctx.lineTo(canvas.width, canvasPosY);
+      ctx.stroke();
+    }
+  }
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0, 0, canvas.width, 20);
+  posX = gridStartPosX;
+  ctx.fillStyle = 'white';
+  while (canvas.width > (posX - imgPos.x) * scale) {
+    posX += gridInterval;
+    const canvasPosX = Math.floor((posX - imgPos.x) * scale);
+    if (canvasPosX < 20) continue;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(posX, canvasPosX, 20);
+  } 
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0, 0, 20, canvas.height);
+  posY = gridStartPosY;
+  ctx.fillStyle = 'white';  
+  while (canvas.height > (posY - imgPos.y) * scale) {
+    posY += gridInterval;    
+    const canvasPosY = Math.floor((posY - imgPos.y) * scale);
+    if (canvasPosY < 20) continue;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'right';
+    ctx.fillText(posY, 20, canvasPosY);
+  }     
+}
+
+function loadImage(src) {
+  img = new Image();
+  img.onload = function() {
+    segmentationCanvas = new OffscreenCanvas(img.width, img.height);
+    const ctx = segmentationCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    draw();
+  }
+  img.src = src;
+}
+
+function loadImageFile(event) {
+  const file = event.target.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    img = new Image();
+    img.onload = function() {
+      segmentationCanvas = new OffscreenCanvas(img.width, img.height);
+      const ctx = segmentationCanvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      draw();
+    }
+    img.src = e.target.result;
+  }
+  reader.readAsDataURL(file);
+}
+
+function loadSegmentationFile(event) {
+  const file = event.target.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const data = JSON.parse(e.target.result);
+    const imageData = new ImageData(data.width, data.height);
+    for (let i = 0; i < data.colors.length; i++) {
+      const color = data.colors[i];
+      imageData.data[i * 4] = color.r;
+      imageData.data[i * 4 + 1] = color.g;
+      imageData.data[i * 4 + 2] = color.b;
+      if (color.r !== 0 || color.g !== 0 || color.b !== 0) {
+        imageData.data[i * 4 + 3] = 128;
+      }
+    }
+    const ctx = segmentationCanvas.getContext('2d');
+    ctx.clearRect(0, 0, segmentationCanvas.width, segmentationCanvas.height);
+    ctx.putImageData(imageData, 0, 0);
+    draw();
+  }
+  reader.readAsText(file);
+}
+
+function segmentation(posX, posY) {
+  if (!segmentationCanvas) return;
+
+  const halfSize = Math.floor(size / 2);
+  const ctx = segmentationCanvas.getContext('2d');
+  ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, 0.5)`;
+  if (toolType === 'pen') {
+    ctx.clearRect(posX - halfSize, posY - halfSize, size, size);
+    ctx.fillRect(posX - halfSize, posY - halfSize, size, size);
+  } else if (toolType === 'penCircle') {
+    for (let x = -halfSize; x <= halfSize; x++) {
+      for (let y = -halfSize; y <= halfSize; y++) {
+        if (x * x + y * y - halfSize * halfSize <= 1) {
+          ctx.clearRect(posX + x, posY + y, 1, 1);
+          ctx.fillRect(posX + x, posY + y, 1, 1);
+        }
+      }
+    }
+  } else if (toolType === 'eraser') {
+    ctx.clearRect(posX - halfSize, posY - halfSize, size, size);
+  } else if (toolType === 'eraserCircle') {
+    for (let x = -halfSize; x <= halfSize; x++) {
+      for (let y = -halfSize; y <= halfSize; y++) {
+        if (x * x + y * y - halfSize * halfSize <= 1) {
+          ctx.clearRect(posX + x, posY + y, 1, 1);
+        }
+      }
+    }    
+  }
+}
+
+function canvas2img(pos) {
+  return {
+    x: pos.x / scale + imgPos.x,
+    y: pos.y / scale + imgPos.y,
+  }
+}
+
+function img2canvas(pos) {
+  return {
+    x: (pos.x - imgPos.x) * scale,
+    y: (pos.y - imgPos.y) * scale,
+  }
+}
+ 
+function calcGridInterval() {
+  if (scale > 30) {
+    return 1;
+  } else if (scale > 10) {
+    return 5;
+  } else if (scale > 5) {
+    return 10;
+  } else if (scale > 1){
+    return 50;
+  } else if (scale > 0.5){
+    return 100;
+  } else if (scale > 0.3){
+    return 500;
+  } else {
+    return 1000;
+  }
+}
+</script>
+
+<body onload="init()">
+  <div>
+    <div id="functionPanel">
+      <div>
+        <div>Image File</div>
+        <div>
+          <input type="file" id="file" accept="image/*" onchange="loadImageFile(event)">
+          <input type="checkbox" id="grid">Grid
+        </div>
+      </div>
+      <div>
+        <div>
+          <input type="checkbox" id="editMode">Edit
+        </div>
+        <div id="editToolPanel">
+          <select id="tool">
+            <option value="pen">Pen(■)</option>
+            <option value="penCircle">Pen(●)</option>
+            <option value="eraser">Eraser(■)</option>
+            <option value="eraserCircle">Eraser(●)</option>
+          </select>
+          <input type="number" style="width:60px" id="size" value="10" min="1" step="1">
+          <input type="color" id="color" value="#0000ff">
+        </div>
+      </div>
+      <div>
+        <div>
+          Segmentation Data
+        </div>  
+        <div>
+          <input type="file" id="load" onchange="loadSegmentationFile(event)">
+          <button id="save">Save</button>
+        </div>  
+      </div>      
+    </div>
+    <div id="editorPanel">
+      <canvas id="canvas"></canvas>
+    </div>
+</div>
+</body>
+
+</html>
