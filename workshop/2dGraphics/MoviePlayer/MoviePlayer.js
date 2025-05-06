@@ -239,7 +239,8 @@ class MoviePlayer {
 
   async setSrc(src) {
     this.isLoaded = false;
-    this.video = document.createElement('video');    
+    this.video = document.createElement('video');
+    this.video.playsInline = true;
     this.video.addEventListener('loadedmetadata', () => {
       // 500 pixで動画全体が表示されるようにする
       this.maxTimeMsPerPix = this.video.duration * 1000 / 500
