@@ -1,0 +1,28 @@
+<html>
+
+<script src="../MoviePlayer.js" type="text/javascript"></script>
+
+<style>
+body {
+  margin: 0;
+}
+
+#videoView {
+  width: 100vw;
+  height: 100vh;
+}
+</style>
+
+<script>
+async function init() {
+  const videoView = document.getElementById('videoView');
+  const moviePlayer = new MoviePlayer(videoView);
+  await moviePlayer.setSrc('./Safie VISION Movie_v01.mp4')
+}
+</script>
+
+<body onload="init()">
+  <div id="videoView"></div>
+</body> 
+
+</html>
