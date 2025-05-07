@@ -45,16 +45,12 @@ let mousePos = { x: 0, y: 0 };
 let imgPos = { x: -20, y: -20 };
 let scale = 1;
 let isEditMode = false;
-let segmentationImageData = null;
-let segmentationImage = null;
 let segmentationCanvas = null;
 let toolType = 'pen';
 let size = 10;
 let color = { r: 0, g: 0, b: 255 };
 let showGrid = false;
 let isMouseOut = true;
-let keyF = false;
-let keyE = false;
 let keyCtrl = false;
 
 function init() {
@@ -170,15 +166,6 @@ function init() {
       showGrid = !showGrid;
       gridInput.checked = showGrid;
       draw();
-    } else if (event.key === 'f') {
-      keyF = !keyF;
-      if (keyF) {
-        canvas.style.cursor = 'none';
-      } else {
-        canvas.style.cursor = 'grab';
-      }
-      draw();
-
     } else if (event.key === 'e') {
       const editModeInput = document.getElementById('editMode');
       isEditMode = !isEditMode;
