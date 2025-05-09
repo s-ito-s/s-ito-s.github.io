@@ -181,7 +181,7 @@ class MoviePlayer {
             }
           }
 
-          const newTimeMsPerPix = this.timeMsPerPix * newMaxDistance / prevMaxDistance
+          const newTimeMsPerPix = this.timeMsPerPix * prevMaxDistance / newMaxDistance 
           this.timeMsPerPix = Math.min(Math.max(MIN_TIME_MS_PER_PIX, newTimeMsPerPix), this.maxTimeMsPerPix)
         }
 
