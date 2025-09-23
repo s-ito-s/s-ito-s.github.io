@@ -24,6 +24,7 @@ class MoviePlayerImpl {
   videoTimerId = null;
   videoForThumbnail = null;
   thumbnailImageList = [];
+  imageRequestQueue = [];
   isThumbnailLoadProcessLocked = false;
 
   playButton = null;
@@ -106,7 +107,7 @@ class MoviePlayerImpl {
         const newCurrentTime = this.video.currentTime + diffX * this.timeMsPerPix / 1000
         this.video.currentTime = Math.max(0, Math.min(this.video.duration - 0.1, newCurrentTime))
         this.video.pause();
-        this.updateThumbnail();
+        this.enqueueImageRequest();
         this.draw()
       }
 
@@ -133,7 +134,7 @@ class MoviePlayerImpl {
         newTimeMsPerPix *= 0.9
       }
       this.timeMsPerPix = Math.min(Math.max(MIN_TIME_MS_PER_PIX, newTimeMsPerPix), this.maxTimeMsPerPix)
-      this.updateThumbnail();
+      this.enqueueImageRequest();
       this.draw()
     })
     this.canvas.addEventListener('touchmove', (e) => {
@@ -193,7 +194,7 @@ class MoviePlayerImpl {
         }
 
         this.video.pause();
-        this.updateThumbnail();
+        this.enqueueImageRequest();
         this.draw()
 
         this.touches = newTouches
@@ -232,7 +233,6 @@ class MoviePlayerImpl {
     window.addEventListener('keydown', (e) => {
       if (e.key === ' ') {
         const log = this.logger.output()
-        console.log(log);
         const blob = new Blob([JSON.stringify(log)], { type: 'application/json' });
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -267,7 +267,7 @@ class MoviePlayerImpl {
     this.video.addEventListener('loadedmetadata', () => {
       // 500 pixで動画全体が表示されるようにする
       this.maxTimeMsPerPix = this.video.duration * 1000 / 500
-      this.updateThumbnail()
+      this.enqueueImageRequest()
     });
     this.video.addEventListener('canplay', () => {
       this.isLoaded = true;
@@ -288,21 +288,6 @@ class MoviePlayerImpl {
     this.video.src = src;
 
     this.videoForThumbnail = document.createElement('video');
-    this.videoForThumbnail.addEventListener('seeked', () => {
-      // console.log('seeked', this.videoForThumbnail.currentTime)
-      const viedoWidth = this.videoForThumbnail.videoWidth;
-      const videoHeight = this.videoForThumbnail.videoHeight;
-      const canvas = document.createElement('canvas');
-      canvas.height = THUMBNAIL_IMAGE_HEIGHT;
-      canvas.width = THUMBNAIL_IMAGE_HEIGHT * viedoWidth / videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(this.videoForThumbnail, 0, 0, canvas.width, canvas.height);
-      const currentTime = this.videoForThumbnail.currentTime * 1000
-      const thumbnailImageIdx = this.thumbnailImageList.findIndex((e) => e.time === currentTime)
-      if (thumbnailImageIdx !== -1) {
-        this.thumbnailImageList[thumbnailImageIdx].image = canvas;
-      }
-    });
     this.videoForThumbnail.src = src;
     this.draw()
 
@@ -313,7 +298,7 @@ class MoviePlayerImpl {
 
   play () {
     const step = () => {
-      this.updateThumbnail();
+      this.enqueueImageRequest();
       this.draw();
       this.videoTimerId = requestAnimationFrame(step);
     }
@@ -337,7 +322,7 @@ class MoviePlayerImpl {
   resize() {
     this.canvas.width = this.dom.clientWidth;
     this.canvas.height = this.dom.clientHeight;
-    this.updateThumbnail();
+    this.enqueueImageRequest();
     this.draw();
   }
 
@@ -459,7 +444,7 @@ class MoviePlayerImpl {
     this.logger.stop(logId, '', false)
   }
 
-  async updateThumbnail() {
+  async enqueueImageRequest() {
     if (this.videoForThumbnail === null) {
       return;
     }
@@ -470,7 +455,7 @@ class MoviePlayerImpl {
     const firstScaleTime = Math.floor(leftEndTime / scaleInterval) * scaleInterval
 
     let i = 0
-    let requestImageCount = 0
+    let newImageRequestCount = 0
     while (1) {
       const scaleTime = firstScaleTime + i * scaleInterval
       if (scaleTime > rightEndTime) {
@@ -496,74 +481,82 @@ class MoviePlayerImpl {
         continue
       }
 
+      if (this.imageRequestQueue.some((e) => e.time === scaleTime)) {
+        i++
+        continue
+      }
+
       const thumbnailImage = {
         time: scaleTime,
         image: null,
       }
-      this.thumbnailImageList.push(thumbnailImage)
-      ++requestImageCount
+      this.imageRequestQueue.push(thumbnailImage)
 
+      newImageRequestCount++
       i++
     }
 
-    if (requestImageCount !== 0) {
-      this.logger.sendMessage(`imageLoadRequired: ${requestImageCount} images`);
+    if (newImageRequestCount !== 0) {
+      this.logger.sendMessage(`imageLoadRequired: ${this.imageRequestQueue.length} images`);
+      this.loadThumbnailImages()
     }
-
-    this.loadThumbnailImage()
   }
 
-  async loadThumbnailImage() {
+  async loadThumbnailImages() {
     if (this.isThumbnailLoadProcessLocked) {
-      // console.log('isThumbnailLoadProcessLocked')
-      return
-    }
-
-    if (!this.thumbnailImageList.find((e) => e.image === null)) {
       return
     }
 
     const loadImagesLogId = this.logger.start('loadThumbnailImages()');
-    while (1) {
-      this.isThumbnailLoadProcessLocked = true
-
-      const notLoadedThumbnailImage = this.thumbnailImageList.find((e) => e.image === null)
-      if (!notLoadedThumbnailImage) {
-        break
-      }
+    this.isThumbnailLoadProcessLocked = true
+    while (this.imageRequestQueue.length !== 0) {
       const loadImageLogId = this.logger.start('loadImage()');
+      const imageRequest = this.imageRequestQueue[0]
+      const image = await this.loadThumbnailImage(imageRequest.time)
+      this.imageRequestQueue = this.imageRequestQueue.filter((r) => r.time !== imageRequest.time)
+      this.thumbnailImageList.push({ time: imageRequest.time, image: image })
+      this.logger.stop(loadImageLogId, `time=${imageRequest.time}`);
+      this.draw()
+    }
+    this.isThumbnailLoadProcessLocked = false
+    this.logger.stop(loadImagesLogId)
 
-      const scaleTime = notLoadedThumbnailImage.time
-      this.videoForThumbnail.currentTime = scaleTime / 1000
+    this.draw()
+  }
 
+  async loadThumbnailImage(timeMs) {
+    return new Promise( async (resolve) => {
+      if (this.videoForThumbnail === null) {
+        resolve();
+        return;
+      }
+
+      let image = null
+
+      const seekedHandler = () => {
+        const viedoWidth = this.videoForThumbnail.videoWidth;
+        const videoHeight = this.videoForThumbnail.videoHeight;
+        const canvas = document.createElement('canvas');
+        canvas.height = THUMBNAIL_IMAGE_HEIGHT;
+        canvas.width = THUMBNAIL_IMAGE_HEIGHT * viedoWidth / videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(this.videoForThumbnail, 0, 0, canvas.width, canvas.height);
+        image = canvas;        
+      }
+
+      this.videoForThumbnail.addEventListener('seeked', seekedHandler);
+      this.videoForThumbnail.currentTime = timeMs / 1000;
       const startTime = Date.now()
-      // console.log('thumbnail load start ', scaleTime, '---------------')
-      while (notLoadedThumbnailImage.image === null) {
-        // console.log('  |-thumbnail load wait')
+      while (image === null) {
         await this.wait(10)
-        const thumbnail = this.thumbnailImageList.find((e) => e.time === scaleTime)
-        if (!thumbnail) {
-          // console.log('  |-thumbnail not found', scaleTime)
-          break
-        }
-        const duration = Date.now() - startTime
-        if (thumbnail.image !== null) {
-          // console.log('  |-thumbnail load end', duration)
-          this.draw()
-          break
-        }
-        if (duration > 5000) {
-          // console.log('  |-updateThumbnail timeout', scaleTime)
+        if (Date.now() - startTime > 5000) {
           break
         } 
       }
+      this.videoForThumbnail.removeEventListener('seeked', seekedHandler);
 
-      this.logger.stop(loadImageLogId, `time=${scaleTime}`);
-    }
-    this.logger.stop(loadImagesLogId)
-
-    this.isThumbnailLoadProcessLocked = false
-    this.draw()
+      resolve(image)
+    });
   }
 
   wait(timeMs) {
