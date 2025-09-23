@@ -230,10 +230,12 @@ class MoviePlayer {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        await this.setSrc(e.target.result);
+        const blob = new Blob([e.target.result], {type: file.type});
+        const url = URL.createObjectURL(blob);
+        await this.setSrc(url);
         resolve();
       };
-      reader.readAsDataURL(file);    
+      reader.readAsArrayBuffer(file);
     })
   }
 
