@@ -1,0 +1,189 @@
+<html lang="ja">
+
+<script src="./TimelineViewer.js"></script>
+
+<style>
+body {
+  margin: 0;
+}
+
+.inputArea {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px;
+}
+
+.fileInputArea {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin: 10px;
+}
+
+#timeline {
+  margin: 0 10px;
+}
+</style>
+
+<script>
+
+const timelines = [
+  { name: "draw()", events: [] },
+  { name: "mouseEvent", events: [] },
+  { name: "imageLoadRequired", events: [] },
+  { name: "loadThumbnailImages()", events: [] },
+  { name: "loadImage()", events: [] },
+]
+
+function init() {
+  const timelineViewer = new TimelineViewer();
+  timelineViewer.initialize(document.getElementById("timeline"));
+  const startTime = new Date();
+  timelineViewer.setStartTime({
+    year: startTime.getFullYear(),
+    month: startTime.getMonth() + 1,
+    day: startTime.getDate(),
+    hour: startTime.getHours(),
+    min: startTime.getMinutes(),
+    sec: startTime.getSeconds(),
+    msec: startTime.getMilliseconds(),
+  });
+  timelineViewer.setTimelines(timelines);
+
+  const socket = new WebSocket("ws://localhost:3001");
+  socket.onopen = () => {
+    console.log("WebSocket connection established");
+  };    
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "log") {
+      const log = data.log
+      const timeline = timelines.find(t => t.name === log.taskName);
+      if (timeline) {
+        timeline.events.push({
+          startTime: log.start,
+          endTime: log.end,
+          comment: log.comment,
+        });
+        timelineViewer.setTimelines(timelines);
+      }
+    }else if (data.type === "message") {
+      let messageTimelineIdx = 1
+      if (data.message.startsWith("imageLoadRequired:")) {
+        messageTimelineIdx = 2
+      }
+      timelines[messageTimelineIdx].events.push({
+        startTime: data.time,
+        endTime: { ...data.time, msec: data.time.msec + 1 },
+        comment: data.message,
+      });
+      timelineViewer.setTimelines(timelines);
+    }
+  };
+  socket.onclose = () => {
+    console.log("WebSocket connection closed");
+  };
+
+  const scaleInput = document.getElementById("scaleInput");
+  scaleInput.value = timelineViewer.getScale();
+  scaleInput.addEventListener("change", () => {
+    timelineViewer.setScale(scaleInput.value);
+  }, false);
+  timelineViewer.onChangeScale = (scale) => {
+    scaleInput.value = scale;
+  };
+
+  const playButton = document.getElementById("playButton");
+  let isPlaying = false;
+  playButton.addEventListener("click", () => {
+    isPlaying = !isPlaying;
+    if (isPlaying) {
+      playButton.textContent = "Pause";
+      setTimelineStartTimeMs();
+    } else {
+      playButton.textContent = "Play";
+    }
+  });
+
+  const setTimelineStartTimeMs = () => {
+    const currentTimeMs = getUTCTimeMs();
+    const timelineWidth = document.getElementById("timeline").clientWidth;
+    const startTimeMs = currentTimeMs - timelineViewer.getTimePerPix() * (timelineWidth / 2);
+    timelineViewer.setStartTimeMs(startTimeMs);
+
+    if (isPlaying) {
+      requestAnimationFrame(setTimelineStartTimeMs);
+    }
+  };
+
+  const fileInput = document.getElementById("fileInput");
+  fileInput.addEventListener("change", (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target.result;
+        const data = JSON.parse(content);
+        const timelineLogs = data.logs;
+        for (timelineLog of timelineLogs) {
+          const timeline = timelines.find(t => t.name === timelineLog.name);
+          if (timeline) {
+            timeline.events = timelineLog.events;
+          }
+        }
+        const messages = data.messages;
+        for (const data of messages) {
+          let messageTimelineIdx = 1
+          if (data.message.startsWith("imageLoadRequired:")) {
+            messageTimelineIdx = 2
+          }
+          timelines[messageTimelineIdx].events.push({
+            startTime: data.time,
+            endTime: { ...data.time, msec: data.time.msec + 1 },
+            comment: data.message,
+          });          
+        }
+        timelineViewer.setTimelines(timelines);
+        const startTime = timelineLogs[0].events[0].startTime
+        timelineViewer.setStartTime(startTime);
+      }
+      reader.readAsText(file);
+    }
+  })
+}
+
+function getUTCTimeMs () {
+  const currentDate = new Date()
+  const date = new Date()
+  date.setUTCFullYear(currentDate.getFullYear())
+  date.setUTCMonth(currentDate.getMonth())
+  date.setUTCDate(currentDate.getDate())
+  date.setUTCHours(currentDate.getHours())
+  date.setUTCMinutes(currentDate.getMinutes())
+  date.setUTCSeconds(currentDate.getSeconds())
+  date.setUTCMilliseconds(currentDate.getMilliseconds())
+  return date.getTime()
+}
+
+</script>
+
+<body onload="init()">
+  <div class="inputArea">
+    <div>
+      <button id="playButton">Play</button>
+    </div>
+    <select id="scaleInput">
+      <option value="msec">msec</option>
+      <option value="sec">sec</option>
+      <option value="min">min</option>
+      <option value="hour">hour</option>
+      <option value="day">day</option>
+    </select>
+  </div>
+  <div id="timeline"></div>
+  <div class="fileInputArea">
+    <input type="file" id="fileInput" accept=".json">
+  </div>
+</body>
+</html>
