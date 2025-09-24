@@ -487,9 +487,11 @@ class MoviePlayer {
     while (this.imageRequestQueue.length !== 0) {
       const imageRequest = this.imageRequestQueue[0]
       const image = await this.loadThumbnailImage(imageRequest.time)
-      this.imageRequestQueue = this.imageRequestQueue.filter((r) => r.time !== imageRequest.time)
-      this.thumbnailImageList.push({ time: imageRequest.time, image: image })
-      this.draw()
+      this.imageRequestQueue.shift()
+      if (image !== null) {
+        this.thumbnailImageList.push({ time: imageRequest.time, image: image })
+        this.draw()
+      }
     }
     this.isThumbnailLoadProcessLocked = false
   }
