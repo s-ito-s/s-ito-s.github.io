@@ -1,0 +1,193 @@
+<html>
+<style>
+body {
+  margin: 0;
+}
+
+#canvas {
+  width: 100vw;
+  height: 100vh;
+}
+</style>
+
+<script>
+const POLYGONS = [
+  { 
+    points: [
+      { x: -200, y:-300 }, 
+      { x: -10, y: -250 }, 
+      { x: -120, y: -80 }, 
+      { x: -250, y: -100 }, 
+      { x: -330, y: -200 }
+    ], 
+    color: 'rgba(255,0,0,0.5)'
+  },
+  { 
+    points: [
+      { x: 150, y: -300 }, 
+      { x: 350, y: -180 }, 
+      { x: 250, y: 100 }, 
+      { x: 20, y: 30 }
+    ], 
+    color: 'rgba(0,255,0,0.5)' 
+  },
+  {
+    points: [
+      { x: -90, y: 80 }, 
+      { x: -120, y: 170 }, 
+      { x: -260, y: 280 }, 
+      { x: -350, y: -20 },
+      { x: -150, y: -50 }
+    ],
+    color: 'rgba(0,0,255,0.5)'
+  },
+  {
+    points: [
+      { x: -30, y: 180 }, 
+      { x: 60, y: 110 }, 
+      { x: 260, y: 150 }, 
+      { x: 180, y: 280 },
+      { x: 0, y: 350 }
+    ],
+    color: 'rgba(255,0,255,0.5)'
+  }  
+]
+
+let rate = 1.0
+let viewOrigin = { x: 0, y: 0 }
+let isMouseDown = false
+let mousePos = { x: 0, y: 0 }
+let showAxis = true
+
+function init () {
+  const canvas = document.getElementById('canvas')
+  canvas.width = canvas.clientWidth
+  canvas.height = canvas.clientHeight
+
+  canvas.addEventListener('mousedown', (e) => {
+    isMouseDown = true
+    mousePos = { x: e.clientX, y: e.clientY }
+  })
+
+  canvas.addEventListener('mouseup', (e) => {
+    isMouseDown = false
+  })
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (isMouseDown) {
+      const dx =  mousePos.x - e.clientX
+      const dy =  mousePos.y - e.clientY
+      viewOrigin.x += dx * rate
+      viewOrigin.y += dy * rate
+    }
+    mousePos = { x: e.clientX, y: e.clientY }
+    draw()
+  })
+
+  canvas.addEventListener('wheel', (e) => {
+    const oldRate = rate
+    if (e.deltaY < 0) {
+      newRate = oldRate * 0.9
+    } else {
+      newRate = oldRate * 1.1
+    }
+    viewOrigin.x = viewOrigin.x + (oldRate - newRate) * mousePos.x
+    viewOrigin.y = viewOrigin.y + (oldRate - newRate) * mousePos.y
+    rate = newRate
+    draw()
+  })
+
+  window.addEventListener('resize', (e) => {
+    canvas.width = canvas.clientWidth
+    canvas.height = canvas.clientHeight
+    draw()
+  })
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'a') {
+      showAxis = !showAxis
+      draw()
+    }
+  })
+
+  const initPos = { x: -canvas.width / 2, y: -canvas.height / 2 }
+  viewOrigin = viewToWorld(initPos)
+
+  draw()
+}
+
+function draw () {
+  const canvas = document.getElementById('canvas')
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  // draw polygons
+  for (const poly of POLYGONS) {
+    const viewPoints = poly.points.map(p => worldToView(p))
+    drawPolygon(ctx, viewPoints, poly.color)
+  }
+
+  if (showAxis) {
+    // draw axis
+    const origin = worldToView({ x: 0, y: 0 })
+    ctx.strokeStyle = 'black'
+    ctx.beginPath()
+    ctx.moveTo(origin.x, 0)
+    ctx.lineTo(origin.x, canvas.height)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(0, origin.y)
+    ctx.lineTo(canvas.width, origin.y)
+    ctx.stroke()
+
+    // draw parameters
+    const fontSize = 16
+    const margin = 10
+    ctx.font = `${fontSize}px Arial`
+    ctx.fillStyle = 'black'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    const mouseWorldPos = viewToWorld(mousePos)
+    ctx.fillText(`Mouse (View) : (${mousePos.x}, ${mousePos.y})`, margin, margin)
+    ctx.fillText(`Mouse (World) : (${mouseWorldPos.x.toFixed(2)}, ${mouseWorldPos.y.toFixed(2)})`, margin, margin * 2 + fontSize)
+    ctx.textBaseline = 'bottom'
+    ctx.fillText(`Rate : ${rate.toFixed(2)}`, margin, canvas.height - margin * 2 - fontSize)
+    ctx.fillText(`View Origin : (${viewOrigin.x.toFixed(2)}, ${viewOrigin.y.toFixed(2)})`, margin, canvas.height - margin)
+  }
+}
+
+function viewToWorld (p) {
+  return {
+    x: p.x * rate + viewOrigin.x,
+    y: p.y * rate + viewOrigin.y
+  }
+}
+
+function worldToView (p) {
+  return {
+    x: (p.x - viewOrigin.x) / rate,
+    y: (p.y - viewOrigin.y) / rate
+  }
+}
+
+function drawPolygon (ctx, points, color) {
+  ctx.fillStyle = color
+  ctx.beginPath()
+  for (let i = 0; i < points.length; i++) {
+    const { x, y } = points[i]
+    if (i == 0) {
+      ctx.moveTo(x, y)
+    } else {
+      ctx.lineTo(x, y)
+    }
+  }
+  ctx.closePath()
+  ctx.fill()
+}
+</script>
+
+<body onload="init()">
+  <canvas id="canvas"></canvas>
+</body> 
+
+</html>
