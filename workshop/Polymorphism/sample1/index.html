@@ -1,0 +1,54 @@
+<html>
+
+<style>
+#canvas {
+  width: 100%;
+  height: 100%;
+}  
+</style>
+
+<script src="SafieCanvas/SafieCanvas.js"></script>
+<script src="SafieCanvas/Object/ObjectBase.js"></script>
+<script src="SafieCanvas/Object/Polygon.js"></script>
+<script src="SafieCanvas/Object/Triangle.js"></script>
+<script src="SafieCanvas/Object/Rectangle.js"></script>
+<script>
+const init = () => {
+  const canvas = new SafieCanvas(document.getElementById('canvas'))
+
+  const rect = new Rectangle()
+  rect.setVertices(50, 50, 100, 100)
+  rect.setColor('rgb(200,100,100)')
+  canvas.addObject(rect)
+
+  const polygon = new Polygon()
+  polygon.setVertices([
+    { x:300, y:120 },
+    { x:360, y:140 },
+    { x:400, y:170 },
+    { x:350, y:240 },
+    { x:300, y:220 },
+    { x:260, y:160 },
+  ])
+  polygon.setColor('rgb(100,100,200)')
+  canvas.addObject(polygon)
+
+  const triangle = new Triangle
+  triangle.setVertices([
+    { x:300, y:270 },
+    { x:250, y:340 },
+    { x:100, y:220 },
+  ])
+  triangle.setColor('rgb(100,200,100)')
+  canvas.addObject(triangle)
+
+  canvas.render()
+};
+
+</script>
+
+<body onload="init()">
+  <div id="canvas"></div>
+</body>
+
+</html>
