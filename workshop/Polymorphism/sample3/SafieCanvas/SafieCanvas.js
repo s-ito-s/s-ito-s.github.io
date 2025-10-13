@@ -19,6 +19,9 @@ class SafieCanvas {
     this.canvas.addEventListener('mousemove', (e) => {
       this.handleMouseMove(e);
     });
+    this.canvas.addEventListener('mouseup', (e) => {
+      this.handleMouseUp(e);
+    });
   }
 
   setCanvasSize(width, height) {
@@ -37,6 +40,14 @@ class SafieCanvas {
     const x = e.offsetX;
     const y = e.offsetY;
 
+    if (this.selectedObject) {
+      this.selectedObject.object.mouseDown(x, y);
+      if (this.selectedObject.object.isEditing()) {
+        this.render();
+        return;
+      }
+    }    
+
     let newSelectedObj = null;
     for (let i = this.objects.length - 1; i >= 0; i--) {
       const obj = this.objects[i].object;
@@ -52,6 +63,7 @@ class SafieCanvas {
       }
       this.selectedObject = newSelectedObj;
       this.selectedObject.object.setSelected(true);
+      this.selectedObject.object.mouseDown(x, y);
       this.render();
     } else {
       if (this.selectedObject) {
@@ -65,7 +77,15 @@ class SafieCanvas {
   handleMouseMove(e) {
     const x = e.offsetX;
     const y = e.offsetY;
-    
+
+    if (this.selectedObject) {
+      if (this.selectedObject.object.isEditing()) {
+        this.selectedObject.object.mouseMove(x, y);
+        this.render();
+        return;
+      }
+    }
+
     let newHoveredObj = null;
     for (let i = this.objects.length - 1; i >= 0; i--) {
       const obj = this.objects[i].object;
@@ -81,7 +101,7 @@ class SafieCanvas {
       }
       this.hoveredObject = newHoveredObj;
       this.hoveredObject.object.setHovered(true);
-      this.render();
+      this.render();      
     } else {
       if (this.hoveredObject) {
         this.hoveredObject.object.setHovered(false);
@@ -91,11 +111,22 @@ class SafieCanvas {
     }
   }
 
+  handleMouseUp() {
+    if (this.selectedObject) {
+      this.selectedObject.object.mouseUp();
+      this.render();
+    }
+  }
+
   render() {
     const ctx = this.canvas.getContext("2d");
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.objects.forEach((o) => {
       o.object.draw(ctx);
     });
+
+    if (this.selectedObject) {
+      this.selectedObject.object.drawController(ctx);
+    }
   }
 }
