@@ -1,0 +1,141 @@
+<html>
+
+<style>
+#app {
+  width: 500px;
+  height: 500px;
+}
+</style>
+
+<script>
+const state = {
+  turn: 'O', // 'X' or 'O'
+  cell: [null, null, null, null, null, null, null, null, null], // 3x3 grid
+}
+const undoStack = [];
+const redoStack = [];
+
+const init = () => {
+  const canvas = document.getElementById('app');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 500;
+  canvas.height = 500;
+  canvas.addEventListener('click', mouseDown);
+  document.getElementById('undo').addEventListener('click', undo);
+  document.getElementById('redo').addEventListener('click', redo);
+  draw(state);
+}
+
+const mouseDown = (e) => {
+  const x = e.offsetX;
+  const y = e.offsetY;
+  const canvas = document.getElementById('app');
+  const col = Math.floor(x / (canvas.width / 3));
+  const row = Math.floor(y / (canvas.height / 3));
+  const index = row * 3 + col;
+  if (state.cell[index] === null) {
+    undoStack.push({
+      turn: state.turn,
+      cell: [...state.cell]
+    });
+    redoStack.length = 0;
+    state.cell[index] = state.turn;
+    if (state.turn === 'X') {
+      state.turn = 'O';
+    } else {
+      state.turn = 'X';
+    }
+    draw(state);
+  }
+}
+
+const undo = () => {
+  if (undoStack.length === 0) {
+    return;
+  }
+
+  redoStack.push({
+    turn: state.turn,
+    cell: [...state.cell]
+  });
+  
+  const lastState = undoStack.pop();
+  state.turn = lastState.turn;
+  state.cell = [...lastState.cell];
+  draw(state);
+}
+
+const redo = () => {
+  if (redoStack.length === 0) {
+    return;
+  }
+
+  undoStack.push({
+    turn: state.turn,
+    cell: [...state.cell]
+  });
+
+  const nextState = redoStack.pop();
+  state.turn = nextState.turn;
+  state.cell = [...nextState.cell];
+  draw(state);
+}
+
+const draw = (state) => {
+  const canvas = document.getElementById('app');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw grid
+  ctx.strokeStyle = 'black';
+  ctx.lineWidth = 1;
+  for (let i = 0; 3 >= i; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * (canvas.width / 3), 0);
+    ctx.lineTo(i * (canvas.width / 3), canvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, i * (canvas.height / 3));
+    ctx.lineTo(canvas.width, i * (canvas.height / 3));
+    ctx.stroke();
+  }
+
+  // Draw X and O
+  for (let i = 0; i < state.cell.length; i++) {
+    const x = (i % 3) * (canvas.width / 3);
+    const y = Math.floor(i / 3) * (canvas.height / 3);
+    if (state.cell[i] === 'X') {
+      ctx.strokeStyle = 'red';
+      ctx.beginPath();
+      ctx.moveTo(x + 20, y + 20);
+      ctx.lineTo(x + (canvas.width / 3) - 20, y + (canvas.height / 3) - 20);
+      ctx.moveTo(x + (canvas.width / 3) - 20, y + 20);
+      ctx.lineTo(x + 20, y + (canvas.height / 3) - 20);
+      ctx.stroke();
+    } else if (state.cell[i] === 'O') {
+      ctx.strokeStyle = 'blue';
+      ctx.beginPath();
+      ctx.arc(x + (canvas.width / 6), y + (canvas.height / 6), (canvas.width / 6) - 20, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  updateButtonStates();
+}
+
+const updateButtonStates = () => {
+  document.getElementById('undo').disabled = undoStack.length === 0;
+  document.getElementById('redo').disabled = redoStack.length === 0;
+}
+</script>
+
+<body onload="init()">
+  <div>
+    <canvas id="app"></canvas>
+    <div>
+      <button id="undo">Undo</button>
+      <button id="redo">Redo</button>
+    </div>
+  </div>
+</body>
+</html>
