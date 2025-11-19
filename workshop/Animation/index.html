@@ -1,0 +1,395 @@
+<html>
+
+<style>
+
+.animation-app-container {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  margin-bottom: 16px;
+}
+
+.app-title {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #ccc;
+}
+
+.main-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.input-container {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.function-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.button-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.duration-form {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.slider-form {
+  width: 100%;
+}
+</style>
+
+<script>
+
+class EasingAnimationAppBase {
+  animationAppDom = null;
+  canvas = null;
+  easingCanvas = null;
+  slider = null;
+  easingTypeSelector = null;
+  durationInput = null;
+  animationId = null;
+  easingFunctions = {
+    linear: (t) => t,
+    easeInQuad: (t) => t * t,
+    easeOutQuad: (t) => t * (2 - t),
+    easeInOutQuad: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+    easeInExpo: (t) => t === 0 ? 0 : Math.pow(2, 10 * (t - 1)),
+    easeOutExpo: (t) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t),
+    easeInOutExpo: (t) => {
+      if (t === 0) return 0;
+      if (t === 1) return 1;
+      if (t < 0.5) return Math.pow(2, 20 * t - 10) / 2;
+      return (2 - Math.pow(2, -20 * t + 10)) / 2;
+    },
+    easeInBack: (t) => {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return c3 * t * t * t - c1 * t * t;
+    },
+    easeOutBack: (t) => {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+    },
+    easeInOutBack: (t) => {
+      const c1 = 1.70158;
+      const c2 = c1 * 1.525;
+      if (t < 0.5) {
+        return (Math.pow(2 * t, 2) * ((c2 + 1) * 2 * t - c2)) / 2;
+      } else {
+        return (Math.pow(2 * t - 2, 2) * ((c2 + 1) * (t * 2 - 2) + c2)) / 2 + 1;
+      }
+    },
+    easeInElastic: (t) => {
+      if (t === 0) return 0;
+      if (t === 1) return 1;
+      return -Math.pow(2, 10 * t - 10) * Math.sin((t * 10 - 10.75) * ((2 * Math.PI) / 3));
+    },
+    easeOutElastic: (t) => {
+      if (t === 0) return 0;
+      if (t === 1) return 1;
+      return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * ((2 * Math.PI) / 3)) + 1;
+    },
+    easeInOutElastic: (t) => {
+      if (t === 0) return 0;
+      if (t === 1) return 1;
+      if (t < 0.5) {
+        return -(Math.pow(2, 20 * t - 10) * Math.sin((20 * t - 11.125) * ((2 * Math.PI) / 4.5))) / 2;
+      } else {
+        return (Math.pow(2, -20 * t + 10) * Math.sin((20 * t - 11.125) * ((2 * Math.PI) / 4.5))) / 2 + 1;
+      }
+    },
+    easeInBounce: (t) => {
+      return 1 - this.easingFunctions.easeOutBounce(1 - t);
+    },
+    easeOutBounce: (t) => {
+      const n1 = 7.5625;
+      const d1 = 2.75;
+      if (t < 1 / d1) {
+        return n1 * t * t;
+      } else if (t < 2 / d1) {
+        return n1 * (t -= 1.5 / d1) * t + 0.75;
+      } else if (t < 2.5 / d1) {
+        return n1 * (t -= 2.25 / d1) * t + 0.9375;
+      } else {
+        return n1 * (t -= 2.625 / d1) * t + 0.984375;
+      }
+    },
+    easeInOutBounce: (t) => {
+      if (t < 0.5) {
+        return (1 - this.easingFunctions.easeOutBounce(1 - 2 * t)) / 2;
+      } else {
+        return (1 + this.easingFunctions.easeOutBounce(2 * t - 1)) / 2;
+      }
+    }
+  }
+
+  constructor(name, width = 450, height = 300) {
+    this.animationAppDom = document.createElement('div');
+    this.animationAppDom.classList.add('animation-app-container');
+    this.animationAppDom.style.width = `${width + 350}px`;
+
+    // Title
+    const appTitle = document.createElement('div');
+    this.animationAppDom.appendChild(appTitle);
+    appTitle.classList.add('app-title');
+    appTitle.textContent = name;
+
+    // Main container
+    const mainContainer = document.createElement('div');
+    this.animationAppDom.appendChild(mainContainer);
+    mainContainer.classList.add('main-container');
+
+    // Canvas
+    this.canvas = document.createElement('canvas');
+    mainContainer.appendChild(this.canvas);
+    this.canvas.style.border = '1px solid #ccc';
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.height = `${height}px`;
+    this.canvas.width = width;
+    this.canvas.height = height;
+
+    // Input container
+    const inputContainer = document.createElement('div');
+    mainContainer.appendChild(inputContainer);
+    inputContainer.classList.add('input-container');
+
+    // Function container
+    const functionContainer = document.createElement('div');
+    inputContainer.appendChild(functionContainer);
+    functionContainer.classList.add('function-container');
+    const buttonContainer = document.createElement('div');
+    functionContainer.appendChild(buttonContainer);
+    buttonContainer.classList.add('button-container');
+    const playButton = document.createElement('button');
+    playButton.textContent = 'Play';
+    playButton.onclick = () => this.playAnimation();
+    buttonContainer.appendChild(playButton);
+    const pauseButton = document.createElement('button');
+    pauseButton.textContent = 'Pause';
+    pauseButton.onclick = () => this.pauseAnimation();
+    buttonContainer.appendChild(pauseButton);
+    const resetButton = document.createElement('button');
+    resetButton.textContent = 'Reset';
+    resetButton.onclick = () => this.resetAnimation();
+    buttonContainer.appendChild(resetButton);
+    this.easingTypeSelector = document.createElement('select');
+    functionContainer.appendChild(this.easingTypeSelector);
+    for (const easingName in this.easingFunctions) {
+      const option = document.createElement('option');
+      option.value = easingName;
+      option.textContent = easingName;
+      this.easingTypeSelector.appendChild(option);
+    }
+    this.easingTypeSelector.onchange = () => this.draw();
+
+    // Easing canvas
+    this.easingCanvas = document.createElement('canvas');
+    inputContainer.appendChild(this.easingCanvas);
+    this.easingCanvas.style.border = '1px solid #ccc';
+    this.easingCanvas.style.width = '300px';
+    this.easingCanvas.style.height = '200px';
+    this.easingCanvas.width = 300;
+    this.easingCanvas.height = 200;
+
+    // Slider form
+    const sliderForm = document.createElement('div');
+    inputContainer.appendChild(sliderForm);
+    sliderForm.classList.add('slider-form');
+    this.slider = document.createElement('input');
+    sliderForm.appendChild(this.slider);
+    this.slider.style.width = '100%';
+    this.slider.type = 'range';
+    this.slider.min = 0;
+    this.slider.max = 100;
+    this.slider.step = 0.001;
+    this.slider.value = 0;
+    this.slider.oninput = (e) => this.changeRate(e.target.value / 100);
+
+    // Duration form
+    const durationForm = document.createElement('div');
+    inputContainer.appendChild(durationForm);
+    durationForm.classList.add('duration-form');
+    const durationLabel = document.createElement('label');
+    durationForm.appendChild(durationLabel);
+    durationLabel.textContent = 'Duration (ms): ';
+    this.durationInput = document.createElement('input');
+    durationForm.appendChild(this.durationInput);
+    this.durationInput.type = 'number';
+    this.durationInput.value = 500;
+
+    this.draw();
+  }    
+
+  drawAnimation (ctx, width, height, rate) {
+    // To be implemented by subclasses
+  }
+
+  getDom () {
+    return this.animationAppDom;
+  }
+
+  draw () {
+    const ctx = this.canvas.getContext('2d');
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    const rate = Number(this.slider.value) / 100;
+    const easingFunction = this.easingFunctions[this.easingTypeSelector.value];
+    const easedRate = easingFunction(rate);
+    this.drawAnimation(ctx, this.canvas.width, this.canvas.height, easedRate);
+    this.drawEasingCurve();
+  }
+
+  drawEasingCurve = () => {
+    const paddingX = 7;
+    const paddingY = 20;
+    const easingCanvasWidth = this.easingCanvas.width - paddingX * 2;
+    const easingCanvasHeight = this.easingCanvas.height - paddingY * 2;
+
+    // Draw easing curve
+    const ctx = this.easingCanvas.getContext('2d');
+    ctx.clearRect(0, 0, this.easingCanvas.width, this.easingCanvas.height);
+    ctx.strokeStyle = '#ccc';
+    ctx.beginPath();
+    for (let x = 0; x <= easingCanvasWidth; x += 5) {
+      const t = x / easingCanvasWidth;
+      const y = this.easingFunctions[this.easingTypeSelector.value](t);
+      const posX = x + paddingX;
+      const posY = easingCanvasHeight - y * easingCanvasHeight + paddingY;
+      if (x === 0) {
+        ctx.moveTo(posX, posY);
+      } else {
+        ctx.lineTo(posX, posY);  
+      }
+    }
+    ctx.stroke();
+
+    // Draw current rate
+    const rate = Number(this.slider.value) / 100;
+    ctx.fillStyle = '#0078D4';
+    const currentX = rate * easingCanvasWidth + paddingX;
+    const easingY = this.easingFunctions[this.easingTypeSelector.value](rate);
+    const currentY = (1 - easingY) * easingCanvasHeight + paddingY;
+    ctx.beginPath();
+    ctx.arc(currentX, currentY, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  playAnimation () {
+    const startTime = new Date().getTime();
+    const duration = Number(this.durationInput.value);
+
+    const animate = () => {
+      const currentTime = new Date().getTime();
+      const elapsed = currentTime - startTime;
+      const rate = elapsed / duration;
+      this.slider.value = Math.min(rate * 100, 100);
+      this.draw();
+
+      if (rate <= 1) {
+        this.animationId = requestAnimationFrame(animate);
+      } else {
+        this.animationId = null;
+      }
+    }
+    this.animationId = requestAnimationFrame(animate);
+  }
+
+  pauseAnimation () {
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+    this.draw();
+  }
+
+  resetAnimation () {
+    this.slider.value = 0;
+    this.pauseAnimation();
+  }
+
+  changeRate = (rate) => {
+    this.slider.value = rate * 100;
+    this.draw();
+  }
+
+  lerp(start, end, rate) {
+    return start + (end - start) * rate;
+  }
+}
+
+class PositionChangeApp extends EasingAnimationAppBase {
+  drawAnimation (ctx, width, height, rate) {
+    const startPosX = 80;
+    const endPosX = width - 80;
+    const posX = this.lerp(startPosX, endPosX, rate);
+
+    ctx.fillStyle = 'blue';
+    ctx.beginPath();
+    ctx.arc(posX, height / 2, 40, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+class ScaleChangeApp extends EasingAnimationAppBase {
+  drawAnimation (ctx, width, height, rate) {
+    const startSize = 20;
+    const endSize = 80;
+    const size = this.lerp(startSize, endSize, rate);
+
+    ctx.fillStyle = 'green';
+    ctx.beginPath();
+    ctx.arc(width / 2, height / 2, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+class MorphingApp extends EasingAnimationAppBase {
+  drawAnimation (ctx, width, height, rate) {
+    const radius = 80;
+    const startVertices = [0,0,120,120,240,240]
+    const endVertices = [0,60,120,180,240,300];
+
+    ctx.fillStyle = 'red';
+    ctx.beginPath();
+    for (let i = 0; i < startVertices.length; i++) {
+      const angle = this.lerp(startVertices[i], endVertices[i] + 360, rate);
+      const PosX = width / 2 + radius * Math.cos(angle / 180 * Math.PI)
+      const PosY = height / 2 + radius * Math.sin(angle / 180 * Math.PI)
+      if (i === 0) {
+        ctx.moveTo(PosX, PosY);
+      } else {
+        ctx.lineTo(PosX, PosY);
+      }
+    }
+    ctx.fill();
+  }
+}
+
+const init = () => {
+  document.body.appendChild(new PositionChangeApp("Position Change").getDom());
+  document.body.appendChild(new ScaleChangeApp("Scale Change").getDom());
+  document.body.appendChild(new MorphingApp("Morphing").getDom());
+}
+</script>
+
+<body onload="init()">
+</body>
+
+</html>
